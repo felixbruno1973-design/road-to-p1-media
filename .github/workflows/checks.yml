@@ -1,0 +1,16 @@
+name: Check Media
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm run check
+      - run: npm test
+      - run: php -l wordpress/rtp1-media/rtp1-media.php
+      - run: php tests/backend.php
