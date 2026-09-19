@@ -142,7 +142,9 @@ Explique dans reason l'effet attendu, dans summary le résultat proposé, et lai
   } catch (e) {
     // Only a rejected proposal may be corrected. Never retry conflicts, writes or uncertain failures.
     if (e.status !== 422 || attempt !== 0) throw e;
-    input.push({role:'assistant',content:JSON.stringify(plan)}, {role:'user',content:JSON.stringify({validationError:e.message,instruction:'Le validateur a refusé ce brouillon, sans modifier la page. Corrige la proposition en respectant le catalogue et la demande initiale. Vérifie les styles HTML qui priment sur les réglages Elementor. Si aucune correction sûre n’est possible, demande une précision.'})});
+    const selected = new Set(plan.changes.map(c => c.elementId));
+    const validElements = snapshot.elements.filter(e => selected.has(e.id)).map(e => ({id:e.id,controlKeys:Object.keys(e.controls || {}),html:e.html ? {selectors:e.html.selectors,properties:e.html.properties} : undefined}));
+    input.push({role:'assistant',content:JSON.stringify(plan)}, {role:'user',content:JSON.stringify({validationError:e.message,validElements,instruction:'Le validateur a refusé ce brouillon, sans modifier la page. Corrige la proposition avec les noms EXACTS des contrôles ci-dessus, sans inventer de réglage. Pour un élément HTML, les espacements se modifient de préférence avec kind html_style, key padding-top, selector fourni et value CSS simple comme 80px. Vérifie les styles HTML qui priment sur les réglages Elementor. Si aucune correction sûre n’est possible, demande une précision.'})});
   }
   }
 }
