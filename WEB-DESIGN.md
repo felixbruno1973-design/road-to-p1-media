@@ -2,7 +2,7 @@
 
 1. Connecter Media avec le code d’accès existant.
 2. Choisir la page et l’affichage, puis dicter ou saisir la demande en français.
-3. Générer le brouillon : le Worker lit l’état réel et demande un plan structuré à l’IA. Une demande ambiguë appelle une précision.
+3. Générer le brouillon : le Worker lit l’état réel et repère les blocs à partir des textes visibles, de leurs parents et de leur ordre. Aucune connaissance de la structure n’est attendue de l’utilisateur. Une demande comme « réduis cet espace » peut donner lieu à une proposition mesurée, à vérifier dans l’aperçu. Si plusieurs cibles sont réellement plausibles, une question porte sur ce qui est visible ; le champ « Votre précision » permet de répondre sans perdre la demande initiale.
 4. Examiner les différences et l’aperçu avant/après. Cocher la validation puis cliquer sur **Valider et publier**.
 5. Le serveur vérifie à nouveau la version, sauvegarde l’original et applique le brouillon. L’historique permet d’annuler tant que la page n’a pas changé depuis.
 
@@ -23,6 +23,7 @@ Les brouillons sont privés, stockés dans WordPress et valables une heure. Les 
 - Authentification sur toutes les routes de données, analyse, dictée et écriture ; contrôle d’origine ; aucune identité WordPress dans le diagnostic public.
 - Plans structurés uniquement. WordPress revalide les identifiants, types, unités et opérations. Le navigateur ne fournit jamais le contenu à publier.
 - Les définitions identiques de réglages sont partagées dans le contexte d’analyse, sans perdre de valeurs. Une proposition refusée par le validateur peut être corrigée une seule fois avec les réglages réellement disponibles. Un conflit ou une erreur de connexion ne déclenche jamais cette correction automatique.
+- Pour un affichage précis, le catalogue d’analyse ne propose que ses contrôles ; les valeurs héritées et les styles restent disponibles pour comprendre la page. Une question technique déclenche une nouvelle analyse interne, dans la limite de deux analyses par demande. Une question technique persistante est remplacée par une question portant sur les textes visibles. Les protections de publication restent indépendantes de l’IA.
 - Empreinte incluant Elementor, réglages de page, titre, contenu, statut et dates, vérifiée sous verrous de lignes InnoDB au moment de l’écriture.
 - Écriture et reçu de sauvegarde dans une seule transaction. Sans stockage transactionnel, publication bloquée.
 - Publication et annulation idempotentes. Après interruption réseau, relire l’historique plutôt que réécrire.

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import worker, {validatePlan,limitedBody,compactElements} from '../worker/index.js';
+import worker, {validatePlan,limitedBody,compactElements,pageGuide,technicalClarification} from '../worker/index.js';
 const env={WRITE_KEY:'test-only-access-key',WP_USERNAME:'test',WP_APP_PASSWORD:'test',WP_URL:'https://road-to-p1.com',OPENAI_API_KEY:'test-only-ai-key'};
 const request=(path,body,extra={})=>new Request('https://media.invalid'+path,{method:body===undefined?'GET':'POST',headers:{'X-RTP1-Key':env.WRITE_KEY,'Content-Type':'application/json',...extra},...(body===undefined?{}:{body:JSON.stringify(body)})});
 const json=(data,status=200)=>Response.json(data,{status});
@@ -13,6 +13,23 @@ test('shared control definitions preserve every element, exact key, constraint a
   assert.equal(Object.keys(compact.controlDefinitions).length,1);
   const expanded=compact.elements.map(({controls,...e})=>({...e,controls:Object.fromEntries(Object.entries(controls).map(([key,ref])=>[key,compact.controlDefinitions[ref]]))}));
   assert.deepEqual(expanded,elements);
+});
+
+test('mobile analysis retains inherited values but offers only mobile controls',()=>{
+  const control={type:'dimensions'};
+  const result=compactElements([{id:'hero',settings:{padding:{top:120}},controls:{padding:control,padding_mobile:control,padding_tablet:control,hide_mobile:{type:'switcher'}},html:{css:'.intro{padding-top:120px}'}}],'mobile');
+  assert.deepEqual(Object.keys(result.elements[0].controls),['padding_mobile','hide_mobile']);
+  assert.equal(result.elements[0].settings.padding.top,120);
+  assert.equal(result.elements[0].html.css,'.intro{padding-top:120px}');
+});
+
+test('page guide links visible words to the containing block without inventing positions',()=>{
+  const result=pageGuide([{id:'hero',parent:'',type:'container'}, {id:'heading',parent:'hero',type:'heading',settings:{title:'L’association'}}, {id:'intro',parent:'hero',type:'html',html:{texts:['Lara et Aaron','Un avenir sur la piste']}}]);
+  assert.deepEqual(result[0].visibleText,['L’association','Lara et Aaron','Un avenir sur la piste']);
+  assert.equal(result[1].parent,'hero');assert.equal(result[1].order,2);
+  assert.equal(technicalClarification('Quel est le sélecteur CSS du conteneur ?'),true);
+  assert.equal(technicalClarification('Pouvez-vous préciser la structure exacte de la page ?'),true);
+  assert.equal(technicalClarification('Le titre près du logo ou celui au-dessus des pilotes ?'),false);
 });
 
 test('every non-health route requires authentication, including AI and history',async()=>{
@@ -127,4 +144,29 @@ test('draft correction stops on repeated validation errors, conflicts and uncert
     assert.equal((await worker.fetch(request('/draft',{pageId:10,instruction:'Réduire l’espace mobile',device:'mobile'}),{...env,OPENAI_API_KEY:undefined,AI})).status,status);
     assert.equal(plans,status===422?2:1);assert.equal(drafts,plans);
   }}finally{globalThis.fetch=prior;}
+});
+
+test('technical questions are resolved internally before returning a draft',async()=>{
+  const prior=globalThis.fetch;let analyses=0,stored;
+  globalThis.fetch=async(url,options)=>{
+    if(url.endsWith('/quota'))return json({ok:true});
+    if(url.includes('/snapshot/'))return json({revision:'r1',page:{id:10},elements:[{id:'8480ea5',parent:'',type:'container',settings:{min_height:{unit:'vh',size:100}},controls:{min_height_mobile:{type:'slider'}}}]});
+    assert.ok(url.endsWith('/draft'));stored=JSON.parse(options.body);return json({ok:true,draft:{id:'test'}});
+  };
+  const AI={run:async(_model,p)=>{
+    if(++analyses===1)return {response:{summary:'',clarification:'Quel est l’identifiant du conteneur Elementor ?',changes:[]}};
+    assert.match(p.messages.at(-1).content,/pageGuide/);
+    return {response:{summary:'Rapprocher le titre du logo sur mobile',clarification:'',changes:[change]}};
+  }};
+  try {const result=await worker.fetch(request('/draft',{pageId:10,instruction:'Rapproche le titre du logo sur mobile',device:'mobile'}),{...env,OPENAI_API_KEY:undefined,AI});assert.equal(result.status,200);assert.ok((await result.json()).draft);assert.equal(analyses,2);assert.equal(stored.revision,'r1');}finally{globalThis.fetch=prior;}
+});
+
+test('repeated technical questions become a visual question and never create a draft',async()=>{
+  const prior=globalThis.fetch;let analyses=0;
+  globalThis.fetch=async(url)=>{
+    if(url.endsWith('/quota'))return json({ok:true});
+    assert.ok(url.includes('/snapshot/'));return json({revision:'r1',page:{id:10},elements:[]});
+  };
+  const AI={run:async()=>{analyses++;return {response:{summary:'',clarification:'Quelle classe CSS faut-il modifier ?',changes:[]}};}};
+  try {const result=await worker.fetch(request('/draft',{pageId:10,instruction:'Réduire cet espace'}),{...env,OPENAI_API_KEY:undefined,AI});const body=await result.json();assert.equal(analyses,2);assert.ok(!body.draft);assert.match(body.clarification,/Quel texte voyez-vous/);assert.equal(technicalClarification(body.clarification),false);}finally{globalThis.fetch=prior;}
 });

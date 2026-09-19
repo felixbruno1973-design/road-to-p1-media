@@ -6,9 +6,9 @@
   const devices = {all:'Tous les écrans',mobile:'Mobile',tablet:'Tablette',desktop:'Ordinateur'};
   let key = sessionStorage.getItem('roadToP1MediaPublishKey') || '';
   sessionStorage.removeItem('roadToP1MediaPublishKey'); // Keep credentials in memory only.
-  let pages = [], current = null, history = [], busy = false, connected = false, recorder = null, recordingStream = null, recordingTimer = null, sequence = 0, previewReady = false;
+  let pages = [], current = null, history = [], busy = false, connected = false, recorder = null, recordingStream = null, recordingTimer = null, sequence = 0, previewReady = false, clarification = null;
   $('view-web').innerHTML = `
-    <div class="panel wd-intro"><span class="kicker">VOTRE SITE, À VOTRE DEMANDE</span><h2>Décrivez. Vérifiez. Publiez.</h2><p>Dictez ou écrivez votre modification. Vous gardez la décision de la mettre en ligne.</p></div>
+    <div class="panel wd-intro"><span class="kicker">VOTRE SITE, À VOTRE DEMANDE</span><h2>Décrivez. Vérifiez. Publiez.</h2><p>Décrivez ce que vous voyez et ce que vous souhaitez changer. L’application recherche elle-même le bloc et les réglages. Vous gardez la décision de mettre la modification en ligne.</p></div>
     <div class="panel wd-access"><div><b id="wdConnection">Connexion au site</b><p id="wdConnectionInfo">Votre code Media protège l’analyse et la publication.</p></div><form id="wdConnectForm"><label>Code d’accès Media<input id="wdKey" type="password" autocomplete="off" placeholder="Votre code de publication existant"></label><button class="btn" id="wdConnect" type="submit">Connecter le site</button></form></div>
     <div id="wdMessage" role="status" aria-live="polite" class="wd-message" hidden></div>
     <div class="panel"><div class="panel-head"><h3>1. Votre modification</h3><span>Aucune modification du site à cette étape</span></div>
@@ -20,6 +20,7 @@
         <p class="file-note span2" id="wdVoiceInfo">La dictée dure au maximum 60 secondes. L’audio est envoyé au service de transcription lorsque vous l’arrêtez. Vous pourrez corriger le texte.</p>
       </form>
     </div>
+    <section id="wdClarification" class="panel wd-clarification" hidden aria-labelledby="wdQuestion"><div class="panel-body"><h3 id="wdQuestion"></h3><p>Répondez avec vos mots : un texte visible, une position dans la page ou le résultat souhaité suffit.</p><form id="wdAnswerForm"><label>Votre précision<textarea id="wdAnswer" maxlength="2000" required placeholder="Ex. Le titre tout en haut, juste sous le logo."></textarea></label><button class="btn primary" id="wdAnswerSubmit" type="submit">Continuer avec cette précision</button></form></div></section>
     <section id="wdDraft" class="panel wd-draft" hidden aria-labelledby="wdDraftTitle">
       <div class="panel-head"><h3 id="wdDraftTitle">2. Votre brouillon</h3><span id="wdDraftStatus"></span></div>
       <div class="panel-body"><h3 id="wdSummary"></h3><p id="wdTarget"></p><div id="wdDiff" class="wd-diff"></div>
@@ -36,7 +37,7 @@
   function message(text, error = false) { $('wdMessage').hidden = !text; $('wdMessage').textContent = text; $('wdMessage').classList.toggle('error',error); }
   function setBusy(value) {
     busy = value;
-    for (const id of ['wdConnect','wdKey','wdPage','wdDevice','wdInstruction','wdGenerate','wdMic','wdEdit','wdReject','wdLoadPreview','wdRefresh']) $(id).disabled = value || (['wdGenerate','wdMic'].includes(id) && !connected);
+    for (const id of ['wdConnect','wdKey','wdPage','wdDevice','wdInstruction','wdGenerate','wdMic','wdEdit','wdReject','wdLoadPreview','wdRefresh','wdAnswer','wdAnswerSubmit']) $(id).disabled = value || (['wdGenerate','wdMic'].includes(id) && !connected);
     document.querySelectorAll('[data-wd-resume],[data-wd-rollback],[data-wd-legacy]').forEach(el=>el.disabled=value);
     $('wdApproval').disabled = value || !previewReady;
     $('wdApply').disabled = value || !previewReady || !$('wdApproval').checked || current?.status !== 'pending';
@@ -58,7 +59,7 @@
     if(current) current.reviewHash='';
   }
   function invalidate() {
-    sequence++; clearPreview(); current=null; $('wdDraft').hidden=true; localStorage.removeItem('rtp1ActiveDraft');
+    sequence++; clearPreview(); current=null; clarification=null; $('wdClarification').hidden=true; $('wdDraft').hidden=true; localStorage.removeItem('rtp1ActiveDraft');
   }
   function stateLabel(d) { return ({pending: d.expiresAt*1000<Date.now()?'Expiré':'À valider',applied:'Publié',rolled_back:'Annulé',rejected:'Rejeté'})[d.status] || d.status; }
   function valueLabel(value) {
@@ -112,9 +113,20 @@
     try {
       const result=await api('/draft',{pageId:Number($('wdPage').value),device:$('wdDevice').value,instruction:$('wdInstruction').value.trim()});
       if(ticket!==sequence) return;
-      if(result.clarification) { message(result.clarification); return; }
+      if(result.clarification) {
+        clarification={question:result.clarification,instruction:$('wdInstruction').value.trim()};
+        $('wdQuestion').textContent=result.clarification; $('wdAnswer').value=''; $('wdClarification').hidden=false;
+        message('Une précision sur ce que vous voyez aidera à préparer le brouillon.'); $('wdClarification').scrollIntoView({behavior:'smooth'}); return;
+      }
       showDraft(result.draft); await refresh(); message('Brouillon préparé. Le site n’a pas été modifié.'); $('wdDraft').scrollIntoView({behavior:'smooth'});
     } catch(e) { message(e.message,true); } finally { setBusy(false); }
+  }
+  async function answerClarification(event) {
+    event.preventDefault(); if(busy || !clarification) return;
+    const answer=$('wdAnswer').value.trim(); if(!answer) return;
+    const instruction=`${clarification.instruction}\n\nQuestion : ${clarification.question}\nMa précision : ${answer}`;
+    if(instruction.length>4000) { message('Votre demande est longue. Raccourcissez le texte initial pour ajouter cette précision.',true); return; }
+    $('wdInstruction').value=instruction; await generate(event);
   }
   async function loadPreview() {
     if(busy||!current) return; setBusy(true); clearPreview(); message('Préparation de l’aperçu avant / après…');
@@ -175,7 +187,7 @@
       recordingTimer=setTimeout(()=>{ if(recorder?.state==='recording') recorder.stop(); },60000);
     } catch(e) { releaseMic(); setBusy(false); message('Accès au micro refusé ou indisponible. Vous pouvez saisir votre demande.',true); }
   }
-  $('wdConnectForm').onsubmit=connect; $('wdForm').onsubmit=generate; $('wdLoadPreview').onclick=loadPreview; $('wdApply').onclick=publish; $('wdReject').onclick=reject;
+  $('wdConnectForm').onsubmit=connect; $('wdForm').onsubmit=generate; $('wdAnswerForm').onsubmit=answerClarification; $('wdLoadPreview').onclick=loadPreview; $('wdApply').onclick=publish; $('wdReject').onclick=reject;
   $('wdApproval').onchange=()=>setBusy(busy); $('wdViewport').onchange=sizePreview;
   $('wdBefore').onclick=()=>{ $('wdBeforeFrame').hidden=false; $('wdAfterFrame').hidden=true; $('wdBefore').setAttribute('aria-pressed','true'); $('wdAfter').setAttribute('aria-pressed','false'); };
   $('wdAfter').onclick=()=>{ $('wdBeforeFrame').hidden=true; $('wdAfterFrame').hidden=false; $('wdBefore').setAttribute('aria-pressed','false'); $('wdAfter').setAttribute('aria-pressed','true'); };
