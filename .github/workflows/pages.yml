@@ -27,10 +27,14 @@ jobs:
         uses: actions/configure-pages@v5
         with:
           enablement: true
+      - name: Stage public assets only
+        run: |
+          mkdir -p dist
+          cp index.html app.js style.css web-design.js web-design.css dist/
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: "."
+          path: "dist"
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

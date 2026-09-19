@@ -1,0 +1,18 @@
+name = "road-to-p1-media-api"
+main = "index.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+keep_vars = true
+
+[ai]
+binding = "AI"
+
+[vars]
+WP_URL = "https://road-to-p1.com"
+ALLOWED_ORIGIN = "https://felixbruno1973-design.github.io"
+OPENAI_MODEL = "gpt-4.1-mini"
+TRANSCRIPTION_MODEL = "gpt-4o-mini-transcribe"
+
+# Existing WP_USERNAME / WP_APP_PASSWORD are retained.
+# Secret: WRITE_KEY. OPENAI_API_KEY is optional (Workers AI works without it).
+# Never put secret values in this file.

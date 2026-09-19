@@ -4,8 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#080b10">
-<title>ROAD TO P1 Media — V1.0.0</title>
-<link rel="stylesheet" href="style.css?v=103">
+<title>ROAD TO P1 Media — V1.1.0</title>
+<link rel="stylesheet" href="style.css?v=110">
+<link rel="stylesheet" href="web-design.css?v=110">
 </head>
 <body>
 <div class="app">
@@ -13,7 +14,7 @@
     <div class="brand">
       <img id="officialLogo" class="official-logo" alt="ROAD TO P1">
       <div class="product">MEDIA</div>
-      <div class="version">V1.0.0</div>
+      <div class="version">V1.1.0</div>
     </div>
     <nav class="nav">
       <button class="active" data-view="home"><span>⌂</span>Accueil</button>
@@ -32,7 +33,7 @@
 
     <section class="view active" id="view-home">
       <div class="hero panel">
-        <div><span class="kicker">MEDIA V1.0.0</span><h2>Trois outils.<br>Une seule identité ROAD TO P1.</h2><p>Produire les contenus de course, faire évoluer le site internet et préparer Lara et Aaron aux interviews en français comme en anglais.</p></div>
+        <div><span class="kicker">MEDIA V1.1.0</span><h2>Trois outils.<br>Une seule identité ROAD TO P1.</h2><p>Produire les contenus de course, faire évoluer le site internet et préparer Lara et Aaron aux interviews en français comme en anglais.</p></div>
         <div class="hero-metrics">
           <div><b id="homeReports">0</b><span>contenus</span></div>
           <div><b id="homeWeb">0</b><span>modifications site</span></div>
@@ -59,7 +60,7 @@
             <label>Statut<select id="repStatus"><option>Brouillon</option><option>À valider</option><option>Validé</option><option>Publié</option></select></label>
             <label class="span2">Angle / objectif<textarea id="repAngle" placeholder="Résultat, progression, partenaire à mettre en avant, message à faire passer..."></textarea></label>
             <label class="span2">Photos / vidéos sources<input type="file" id="repFiles" multiple accept="image/*,video/*"></label>
-            <div class="file-note span2" id="repFileNote">Aucun média sélectionné. V1.0.0 mémorise leur nom ; le montage automatique viendra ensuite.</div>
+            <div class="file-note span2" id="repFileNote">Aucun média sélectionné. V1.1.0 mémorise leur nom ; le montage automatique viendra ensuite.</div>
             <div class="actions span2"><button class="btn" id="repGenerate">Générer une proposition</button><button class="btn primary" id="repSave">Enregistrer</button></div>
             <label class="span2">Texte / script<textarea class="large" id="repText" placeholder="Le contenu généré ou rédigé apparaîtra ici."></textarea></label>
           </div>
@@ -68,35 +69,7 @@
       </div>
     </section>
 
-    <section class="view" id="view-web">
-      <div class="section-grid web-grid">
-        <div class="panel">
-          <div class="panel-head"><h3>Site actuel</h3><span>road-to-p1.com</span></div>
-          <div class="panel-body site-card">
-            <div class="site-screen"><span>ROAD TO P1</span><b>Site officiel</b><small>Zone de contrôle Web Design</small></div>
-            <div class="site-connection"><span class="connection-dot" id="webConnectionDot"></span><div><b id="webConnectionStatus">Connexion WordPress à tester</b><small id="webConnectionDetail">Lecture seule via Cloudflare Worker</small></div></div>
-            <button class="btn primary" id="webSync">Synchroniser le site</button>
-            <a class="btn ghost" href="https://road-to-p1.com" target="_blank" rel="noopener">Ouvrir le site ↗</a>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="panel-head"><h3>Nouvelle modification</h3><span>À préparer</span></div>
-          <div class="panel-body form-grid">
-            <label>Page<select id="webPage"><option>Accueil</option><option>Lara</option><option>Aaron</option><option>Partenaires</option><option>Résultats</option><option>Actualités</option><option>Contact</option><option>Autre</option></select></label>
-            <label>Priorité<select id="webPriority"><option>Haute</option><option selected>Normale</option><option>Basse</option></select></label>
-            <label class="span2">Titre<input id="webTitle" placeholder="Ex. Mettre à jour la page Lara"></label>
-            <label class="span2">Description<textarea id="webDesc" placeholder="Décrire précisément la modification attendue..."></textarea></label>
-            <div class="actions span2"><button class="btn primary" id="webSave">Ajouter à la liste</button></div>
-          </div>
-        </div>
-      </div>
-      <div class="panel web-pages"><div class="panel-head"><h3>Pages WordPress</h3><span id="webPagesCount">Non synchronisé</span></div><div class="panel-body"><div id="webPages" class="wp-pages-list"><div class="empty">Cliquez sur « Synchroniser le site » pour lire les pages du vrai road-to-p1.com.</div></div></div></div>
-      <div class="panel web-backlog"><div class="panel-head"><h3>Modifications du site</h3><span id="webCount">0 demande</span></div><div class="panel-body"><div id="webList" class="stack-list"></div></div></div>
-      <div class="panel web-publish">
-        <div class="publish-copy"><span class="publish-kicker">PUBLICATION DU SITE</span><h3>Mettre en ligne les modifications</h3><p>Vérification, aperçu du lot et validation obligatoire avant toute publication.</p><small id="webDeployHint">Aucune modification en attente.</small></div>
-        <button class="btn primary publish-btn" id="webDeployStart">Mettre à jour le site</button>
-      </div>
-    </section>
+    <section class="view" id="view-web"></section>
 
     <section class="view" id="view-training">
       <div class="training-layout">
@@ -121,30 +94,11 @@
       <div class="panel training-history"><div class="panel-head"><h3>Historique d’entraînement</h3><span id="trCount">0 session</span></div><div class="panel-body"><div id="trList" class="stack-list"></div></div></div>
     </section>
 
-    <footer>ROAD TO P1 Media • V1.0.0 • Données enregistrées localement dans ce navigateur</footer>
+    <footer>ROAD TO P1 Media • V1.1.0 • Données enregistrées localement dans ce navigateur</footer>
   </main>
 </div>
-<div class="modal-backdrop" id="webDeployModal" aria-hidden="true">
-  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="webDeployTitle">
-    <div class="modal-head">
-      <div><span class="publish-kicker">ROAD TO P1 • WEB DESIGN</span><h3 id="webDeployTitle">Mise à jour du site</h3></div>
-      <button class="modal-close" id="webDeployClose" aria-label="Fermer">×</button>
-    </div>
-    <div class="deploy-steps">
-      <span data-deploy-step="1">1. Vérification</span>
-      <span data-deploy-step="2">2. Aperçu</span>
-      <span data-deploy-step="3">3. Validation</span>
-      <span data-deploy-step="4">4. Publication</span>
-    </div>
-    <div class="modal-body" id="webDeployBody"></div>
-    <div class="modal-actions">
-      <button class="btn" id="webDeployCancel">Annuler</button>
-      <button class="btn" id="webDeployPrev">Retour</button>
-      <button class="btn primary" id="webDeployNext">Continuer</button>
-    </div>
-  </div>
-</div>
 <div class="toast" id="toast"></div>
-<script src="app.js?v=104"></script>
+<script src="app.js?v=110"></script>
+<script src="web-design.js?v=110"></script>
 </body>
 </html>
