@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#080b10">
 <title>ROAD TO P1 Media — V1.0.0</title>
-<link rel="stylesheet" href="style.css?v=100">
+<link rel="stylesheet" href="style.css?v=101">
 </head>
 <body>
 <div class="app">
@@ -86,6 +86,10 @@
         </div>
       </div>
       <div class="panel web-backlog"><div class="panel-head"><h3>Modifications du site</h3><span id="webCount">0 demande</span></div><div class="panel-body"><div id="webList" class="stack-list"></div></div></div>
+      <div class="panel web-publish">
+        <div class="publish-copy"><span class="publish-kicker">PUBLICATION DU SITE</span><h3>Mettre en ligne les modifications</h3><p>Vérification, aperçu du lot et validation obligatoire avant toute publication.</p><small id="webDeployHint">Aucune modification en attente.</small></div>
+        <button class="btn primary publish-btn" id="webDeployStart">Mettre à jour le site</button>
+      </div>
     </section>
 
     <section class="view" id="view-training">
@@ -114,7 +118,27 @@
     <footer>ROAD TO P1 Media • V1.0.0 • Données enregistrées localement dans ce navigateur</footer>
   </main>
 </div>
+<div class="modal-backdrop" id="webDeployModal" aria-hidden="true">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="webDeployTitle">
+    <div class="modal-head">
+      <div><span class="publish-kicker">ROAD TO P1 • WEB DESIGN</span><h3 id="webDeployTitle">Mise à jour du site</h3></div>
+      <button class="modal-close" id="webDeployClose" aria-label="Fermer">×</button>
+    </div>
+    <div class="deploy-steps">
+      <span data-deploy-step="1">1. Vérification</span>
+      <span data-deploy-step="2">2. Aperçu</span>
+      <span data-deploy-step="3">3. Validation</span>
+      <span data-deploy-step="4">4. Publication</span>
+    </div>
+    <div class="modal-body" id="webDeployBody"></div>
+    <div class="modal-actions">
+      <button class="btn" id="webDeployCancel">Annuler</button>
+      <button class="btn" id="webDeployPrev">Retour</button>
+      <button class="btn primary" id="webDeployNext">Continuer</button>
+    </div>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
-<script src="app.js?v=100"></script>
+<script src="app.js?v=101"></script>
 </body>
 </html>
