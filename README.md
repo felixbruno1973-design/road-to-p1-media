@@ -1,11 +1,14 @@
-# ROAD TO P1 Media — V1.1.0
+# ROAD TO P1 Media — V2.0
 
-ROAD TO P1 Media regroupe trois modules :
+ROAD TO P1 Media est désormais organisé autour de quatre modules complémentaires :
 
-- **Reports** : posts, stories, reels, rapports de course et communications partenaires.
-- **Web Design** : demande en français par texte ou dictée, brouillon fondé sur la page WordPress/Elementor réelle, aperçu avant/après, puis publication sur validation explicite. Sauvegarde et retour arrière protégés contre les modifications concurrentes.
-- **Media Training** : entraînement Lara/Aaron en français et en anglais, dictée vocale et évaluation.
+- **Studio** : création de posts, stories, reels, scripts vidéo, annonces avant-course et contenus partenaires à partir des ressources disponibles.
+- **Reports** : rapports de course, bilans partenaires, bilans mensuels ou de saison et communiqués structurés.
+- **Media Training** : entraînement de Lara et Aaron aux interviews en français et en anglais, avec dictée vocale et évaluation.
+- **Library** : bibliothèque centrale de photos, vidéos, logos et documents, stockés localement dans le navigateur via IndexedDB et réutilisables par Studio.
 
-Reports et Media Training conservent leurs données locales. Les brouillons et sauvegardes Web Design sont privés et enregistrés dans WordPress. Cloudflare Workers AI permet l’analyse et la transcription sans clé OpenAI.
+## Évolution V2.0
 
-Voir [le fonctionnement, les protections et les limites de Web Design](WEB-DESIGN.md).
+Le module **Web Design** de la V1 est retiré de l'application. La gestion et la modification du site `road-to-p1.com` sont désormais réalisées directement avec ChatGPT Work, afin d'éviter une couche technique intermédiaire fragile.
+
+Les données existantes de **Reports** et **Media Training** restent compatibles avec le stockage local de la V1. Les nouveaux médias ajoutés à Library sont stockés dans le navigateur utilisé : ils ne sont pas encore synchronisés entre plusieurs appareils.

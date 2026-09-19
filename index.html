@@ -4,9 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#080b10">
-<title>ROAD TO P1 Media — V1.1.0</title>
-<link rel="stylesheet" href="style.css?v=110">
-<link rel="stylesheet" href="web-design.css?v=110">
+<title>ROAD TO P1 Media — V2.0</title>
+<link rel="stylesheet" href="style.css?v=200">
 </head>
 <body>
 <div class="app">
@@ -14,62 +13,87 @@
     <div class="brand">
       <img id="officialLogo" class="official-logo" alt="ROAD TO P1">
       <div class="product">MEDIA</div>
-      <div class="version">V1.1.0</div>
+      <div class="version">V2.0</div>
     </div>
     <nav class="nav">
       <button class="active" data-view="home"><span>⌂</span>Accueil</button>
+      <button data-view="studio"><span>✦</span>Studio</button>
       <button data-view="reports"><span>◉</span>Reports</button>
-      <button data-view="web"><span>⌘</span>Web Design</button>
       <button data-view="training"><span>🎙</span>Media Training</button>
+      <button data-view="library"><span>▦</span>Library</button>
     </nav>
-    <div class="side-foot">ROAD TO P1<br><span>Communication • Image • Média</span></div>
+    <div class="side-foot">ROAD TO P1<br><span>Communication • Content • Media Training</span></div>
   </aside>
 
   <main class="main">
     <header class="topbar">
-      <div><div class="eyebrow">ROAD TO P1 • MEDIA</div><h1 id="pageTitle">Media Center</h1><p id="pageSubtitle">Créer, publier et entraîner les pilotes à communiquer.</p></div>
-      <div class="top-actions"><span class="status"><i></i>Espace Media</span></div>
+      <div><div class="eyebrow">ROAD TO P1 • MEDIA</div><h1 id="pageTitle">Media Center</h1><p id="pageSubtitle">Créer, structurer, entraîner et conserver.</p></div>
+      <div class="top-actions"><span class="status"><i></i>Media V2.0</span></div>
     </header>
 
     <section class="view active" id="view-home">
       <div class="hero panel">
-        <div><span class="kicker">MEDIA V1.1.0</span><h2>Trois outils.<br>Une seule identité ROAD TO P1.</h2><p>Produire les contenus de course, faire évoluer le site internet et préparer Lara et Aaron aux interviews en français comme en anglais.</p></div>
-        <div class="hero-metrics">
-          <div><b id="homeReports">0</b><span>contenus</span></div>
-          <div><b id="homeWeb">0</b><span>modifications site</span></div>
-          <div><b id="homeTraining">0</b><span>sessions média</span></div>
+        <div><span class="kicker">MEDIA V2.0</span><h2>Quatre modules.<br>Une seule histoire ROAD TO P1.</h2><p>Studio crée les contenus, Reports structure les bilans, Media Training prépare Lara et Aaron à prendre la parole, et Library conserve les ressources médias.</p></div>
+        <div class="hero-metrics four">
+          <div><b id="homeStudio">0</b><span>créations</span></div>
+          <div><b id="homeReports">0</b><span>rapports</span></div>
+          <div><b id="homeTraining">0</b><span>sessions</span></div>
+          <div><b id="homeLibrary">0</b><span>médias</span></div>
         </div>
       </div>
-      <div class="module-grid">
-        <article class="module-card" data-open="reports"><div class="module-icon">◉</div><div class="module-tag">CRÉATION</div><h3>Reports</h3><p>Posts Instagram/Facebook, stories, reels, rapports de course et contenus partenaires.</p><button>Ouvrir Reports →</button></article>
-        <article class="module-card" data-open="web"><div class="module-icon">⌘</div><div class="module-tag">SITE INTERNET</div><h3>Web Design</h3><p>Préparer, suivre et valider les évolutions du site road-to-p1.com.</p><button>Ouvrir Web Design →</button></article>
+      <div class="module-grid four">
+        <article class="module-card" data-open="studio"><div class="module-icon">✦</div><div class="module-tag">CRÉATION</div><h3>Studio</h3><p>Posts, stories, reels, scripts vidéo et contenus partenaires à partir des médias de Library.</p><button>Ouvrir Studio →</button></article>
+        <article class="module-card" data-open="reports"><div class="module-icon">◉</div><div class="module-tag">BILANS</div><h3>Reports</h3><p>Rapports de course, bilans partenaires, synthèses de saison et communiqués structurés.</p><button>Ouvrir Reports →</button></article>
         <article class="module-card" data-open="training"><div class="module-icon">🎙</div><div class="module-tag">PILOTES</div><h3>Media Training</h3><p>Interviews FR/EN, entraînement au micro, clarté, structure et aisance.</p><button>Ouvrir Media Training →</button></article>
+        <article class="module-card" data-open="library"><div class="module-icon">▦</div><div class="module-tag">RESSOURCES</div><h3>Library</h3><p>Photos, vidéos, logos et documents centralisés, classés et réutilisables.</p><button>Ouvrir Library →</button></article>
       </div>
       <div class="panel recent"><div class="panel-head"><h3>Activité récente</h3><span>Dernières actions Media</span></div><div id="recentActivity" class="activity-list"></div></div>
+    </section>
+
+    <section class="view" id="view-studio">
+      <div class="section-grid studio-grid">
+        <div class="panel form-panel">
+          <div class="panel-head"><h3>Nouvelle création</h3><span>Créer un brouillon média</span></div>
+          <div class="panel-body form-grid">
+            <label>Pilote<select id="stPilot"><option>Lara</option><option>Aaron</option><option>ROAD TO P1</option></select></label>
+            <label>Format<select id="stType"><option>Post Instagram / Facebook</option><option>Story</option><option>Reel / vidéo courte</option><option>Contenu partenaire</option><option>Annonce avant-course</option></select></label>
+            <label class="span2">Événement / course<input id="stEvent" placeholder="Ex. Anneville — Championnat de France"></label>
+            <label>Statut<select id="stStatus"><option>Brouillon</option><option>À valider</option><option>Prêt</option><option>Publié</option></select></label>
+            <label>Ton<select id="stTone"><option>Sportif</option><option>Humain</option><option>Partenaire</option><option>Institutionnel</option><option>Énergique</option></select></label>
+            <label class="span2">Objectif / message<textarea id="stObjective" placeholder="Résultat, progression, émotion, partenaire à remercier, message à faire passer..."></textarea></label>
+            <div class="actions span2"><button class="btn" id="stGenerate">Générer une proposition</button><button class="btn primary" id="stSave">Enregistrer</button></div>
+            <label class="span2">Texte / script<textarea class="large" id="stText" placeholder="Le contenu proposé apparaîtra ici."></textarea></label>
+          </div>
+        </div>
+        <div class="panel asset-picker-panel">
+          <div class="panel-head"><h3>Médias Library</h3><span id="stAssetCount">0 sélectionné</span></div>
+          <div class="panel-body picker-body">
+            <input class="search" id="stAssetSearch" placeholder="Rechercher dans Library...">
+            <div id="stAssetList" class="asset-picker-list"></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel history-panel"><div class="panel-head"><h3>Créations Studio</h3><span id="stCount">0 création</span></div><div class="panel-body"><input class="search" id="stSearch" placeholder="Rechercher une création..."><div id="stList" class="stack-list top-gap"></div></div></div>
     </section>
 
     <section class="view" id="view-reports">
       <div class="section-grid reports-grid">
         <div class="panel form-panel">
-          <div class="panel-head"><h3>Nouveau contenu</h3><span>Créer un brouillon</span></div>
+          <div class="panel-head"><h3>Nouveau report</h3><span>Structurer un bilan</span></div>
           <div class="panel-body form-grid">
             <label>Pilote<select id="repPilot"><option>Lara</option><option>Aaron</option><option>ROAD TO P1</option></select></label>
-            <label>Type<select id="repType"><option>Post Instagram / Facebook</option><option>Story</option><option>Reel / vidéo courte</option><option>Rapport de course</option><option>Communiqué partenaires</option></select></label>
-            <label class="span2">Événement / course<input id="repEvent" placeholder="Ex. Anneville — Championnat de France"></label>
+            <label>Type<select id="repType"><option>Rapport de course</option><option>Bilan partenaires</option><option>Bilan mensuel</option><option>Bilan de saison</option><option>Communiqué</option></select></label>
+            <label class="span2">Événement / période<input id="repEvent" placeholder="Ex. Anneville — Championnat de France"></label>
             <label>Date<input type="date" id="repDate"></label>
-            <label>Statut<select id="repStatus"><option>Brouillon</option><option>À valider</option><option>Validé</option><option>Publié</option></select></label>
-            <label class="span2">Angle / objectif<textarea id="repAngle" placeholder="Résultat, progression, partenaire à mettre en avant, message à faire passer..."></textarea></label>
-            <label class="span2">Photos / vidéos sources<input type="file" id="repFiles" multiple accept="image/*,video/*"></label>
-            <div class="file-note span2" id="repFileNote">Aucun média sélectionné. V1.1.0 mémorise leur nom ; le montage automatique viendra ensuite.</div>
-            <div class="actions span2"><button class="btn" id="repGenerate">Générer une proposition</button><button class="btn primary" id="repSave">Enregistrer</button></div>
-            <label class="span2">Texte / script<textarea class="large" id="repText" placeholder="Le contenu généré ou rédigé apparaîtra ici."></textarea></label>
+            <label>Statut<select id="repStatus"><option>Brouillon</option><option>À valider</option><option>Validé</option><option>Envoyé</option></select></label>
+            <label class="span2">Faits clés<textarea id="repFacts" placeholder="Résultats, progrès, incidents, points techniques, partenaires, prochaines étapes..."></textarea></label>
+            <div class="actions span2"><button class="btn" id="repGenerate">Générer une trame</button><button class="btn primary" id="repSave">Enregistrer</button></div>
+            <label class="span2">Rapport<textarea class="large" id="repText" placeholder="La trame générée ou le rapport rédigé apparaîtra ici."></textarea></label>
           </div>
         </div>
-        <div class="panel library-panel"><div class="panel-head"><h3>Bibliothèque</h3><span id="repCount">0 contenu</span></div><div class="panel-body"><input class="search" id="repSearch" placeholder="Rechercher un pilote, une course, un type..."><div id="repList" class="stack-list"></div></div></div>
+        <div class="panel library-panel"><div class="panel-head"><h3>Rapports enregistrés</h3><span id="repCount">0 rapport</span></div><div class="panel-body"><input class="search" id="repSearch" placeholder="Rechercher un pilote, une course, un type..."><div id="repList" class="stack-list top-gap"></div></div></div>
       </div>
     </section>
-
-    <section class="view" id="view-web"></section>
 
     <section class="view" id="view-training">
       <div class="training-layout">
@@ -78,7 +102,7 @@
           <div class="panel-body form-grid onecol">
             <label>Pilote<select id="trPilot"><option>Lara</option><option>Aaron</option></select></label>
             <label>Langue<select id="trLang"><option value="fr">Français</option><option value="en">English</option></select></label>
-            <label>Format<select id="trFormat"><option value="race">Interview après course</option><option value="sponsor">Interview partenaire</option><option value="quick">Interview rapide</option></select></label>
+            <label>Format<select id="trFormat"><option value="race">Interview après course</option><option value="sponsor">Interview partenaire</option><option value="quick">Interview rapide</option><option value="pressure">Question difficile</option></select></label>
             <button class="btn primary" id="trStart">Nouvelle question</button>
           </div>
         </div>
@@ -94,11 +118,36 @@
       <div class="panel training-history"><div class="panel-head"><h3>Historique d’entraînement</h3><span id="trCount">0 session</span></div><div class="panel-body"><div id="trList" class="stack-list"></div></div></div>
     </section>
 
-    <footer>ROAD TO P1 Media • V1.1.0</footer>
+    <section class="view" id="view-library">
+      <div class="section-grid library-grid">
+        <div class="panel form-panel">
+          <div class="panel-head"><h3>Ajouter à Library</h3><span>Stockage local sécurisé par le navigateur</span></div>
+          <div class="panel-body form-grid">
+            <label class="span2 upload-zone">Fichiers<input type="file" id="libFiles" multiple accept="image/*,video/*,.pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.webp,.mp4,.mov"></label>
+            <label>Pilote<select id="libPilot"><option>ROAD TO P1</option><option>Lara</option><option>Aaron</option><option>Commun</option></select></label>
+            <label>Catégorie<select id="libCategory"><option>Automatique</option><option>Photo</option><option>Vidéo</option><option>Logo</option><option>Document</option></select></label>
+            <label class="span2">Événement / dossier<input id="libEvent" placeholder="Ex. Anneville 2026, Partenaires, Identité visuelle..."></label>
+            <label>Date<input type="date" id="libDate"></label>
+            <label>Tags<input id="libTags" placeholder="podium, paddock, casque, sponsor..."></label>
+            <div class="file-note span2" id="libFileNote">Aucun fichier sélectionné.</div>
+            <div class="actions span2"><button class="btn primary" id="libSave">Ajouter à Library</button></div>
+          </div>
+        </div>
+        <div class="panel library-browser">
+          <div class="panel-head"><h3>Bibliothèque</h3><span id="libStats">0 fichier</span></div>
+          <div class="panel-body">
+            <div class="library-tools"><input class="search" id="libSearch" placeholder="Rechercher nom, pilote, événement, tag..."><select id="libTypeFilter"><option value="">Tous</option><option>Photo</option><option>Vidéo</option><option>Logo</option><option>Document</option></select></div>
+            <div id="libList" class="library-list top-gap"></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel library-preview-panel"><div class="panel-head"><h3>Aperçu</h3><span id="libPreviewMeta">Sélectionnez un média</span></div><div id="libPreview" class="library-preview"><div class="empty">Aucun média sélectionné.</div></div></div>
+    </section>
+
+    <footer>ROAD TO P1 Media • V2.0</footer>
   </main>
 </div>
 <div class="toast" id="toast"></div>
-<script src="app.js?v=110"></script>
-<script src="web-design.js?v=112"></script>
+<script src="app.js?v=200"></script>
 </body>
 </html>
