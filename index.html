@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#080b10">
+<title>ROAD TO P1 Media — V1.0.0</title>
+<link rel="stylesheet" href="style.css?v=100">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <img id="officialLogo" class="official-logo" alt="ROAD TO P1">
+      <div class="product">MEDIA</div>
+      <div class="version">V1.0.0</div>
+    </div>
+    <nav class="nav">
+      <button class="active" data-view="home"><span>⌂</span>Accueil</button>
+      <button data-view="reports"><span>◉</span>Reports</button>
+      <button data-view="web"><span>⌘</span>Web Design</button>
+      <button data-view="training"><span>🎙</span>Media Training</button>
+    </nav>
+    <div class="side-foot">ROAD TO P1<br><span>Communication • Image • Média</span></div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div><div class="eyebrow">ROAD TO P1 • MEDIA</div><h1 id="pageTitle">Media Center</h1><p id="pageSubtitle">Créer, publier et entraîner les pilotes à communiquer.</p></div>
+      <div class="top-actions"><span class="status"><i></i>Données locales</span></div>
+    </header>
+
+    <section class="view active" id="view-home">
+      <div class="hero panel">
+        <div><span class="kicker">MEDIA V1.0.0</span><h2>Trois outils.<br>Une seule identité ROAD TO P1.</h2><p>Produire les contenus de course, faire évoluer le site internet et préparer Lara et Aaron aux interviews en français comme en anglais.</p></div>
+        <div class="hero-metrics">
+          <div><b id="homeReports">0</b><span>contenus</span></div>
+          <div><b id="homeWeb">0</b><span>modifications site</span></div>
+          <div><b id="homeTraining">0</b><span>sessions média</span></div>
+        </div>
+      </div>
+      <div class="module-grid">
+        <article class="module-card" data-open="reports"><div class="module-icon">◉</div><div class="module-tag">CRÉATION</div><h3>Reports</h3><p>Posts Instagram/Facebook, stories, reels, rapports de course et contenus partenaires.</p><button>Ouvrir Reports →</button></article>
+        <article class="module-card" data-open="web"><div class="module-icon">⌘</div><div class="module-tag">SITE INTERNET</div><h3>Web Design</h3><p>Préparer, suivre et valider les évolutions du site road-to-p1.com.</p><button>Ouvrir Web Design →</button></article>
+        <article class="module-card" data-open="training"><div class="module-icon">🎙</div><div class="module-tag">PILOTES</div><h3>Media Training</h3><p>Interviews FR/EN, entraînement au micro, clarté, structure et aisance.</p><button>Ouvrir Media Training →</button></article>
+      </div>
+      <div class="panel recent"><div class="panel-head"><h3>Activité récente</h3><span>Dernières actions Media</span></div><div id="recentActivity" class="activity-list"></div></div>
+    </section>
+
+    <section class="view" id="view-reports">
+      <div class="section-grid reports-grid">
+        <div class="panel form-panel">
+          <div class="panel-head"><h3>Nouveau contenu</h3><span>Créer un brouillon</span></div>
+          <div class="panel-body form-grid">
+            <label>Pilote<select id="repPilot"><option>Lara</option><option>Aaron</option><option>ROAD TO P1</option></select></label>
+            <label>Type<select id="repType"><option>Post Instagram / Facebook</option><option>Story</option><option>Reel / vidéo courte</option><option>Rapport de course</option><option>Communiqué partenaires</option></select></label>
+            <label class="span2">Événement / course<input id="repEvent" placeholder="Ex. Anneville — Championnat de France"></label>
+            <label>Date<input type="date" id="repDate"></label>
+            <label>Statut<select id="repStatus"><option>Brouillon</option><option>À valider</option><option>Validé</option><option>Publié</option></select></label>
+            <label class="span2">Angle / objectif<textarea id="repAngle" placeholder="Résultat, progression, partenaire à mettre en avant, message à faire passer..."></textarea></label>
+            <label class="span2">Photos / vidéos sources<input type="file" id="repFiles" multiple accept="image/*,video/*"></label>
+            <div class="file-note span2" id="repFileNote">Aucun média sélectionné. V1.0.0 mémorise leur nom ; le montage automatique viendra ensuite.</div>
+            <div class="actions span2"><button class="btn" id="repGenerate">Générer une proposition</button><button class="btn primary" id="repSave">Enregistrer</button></div>
+            <label class="span2">Texte / script<textarea class="large" id="repText" placeholder="Le contenu généré ou rédigé apparaîtra ici."></textarea></label>
+          </div>
+        </div>
+        <div class="panel library-panel"><div class="panel-head"><h3>Bibliothèque</h3><span id="repCount">0 contenu</span></div><div class="panel-body"><input class="search" id="repSearch" placeholder="Rechercher un pilote, une course, un type..."><div id="repList" class="stack-list"></div></div></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-web">
+      <div class="section-grid web-grid">
+        <div class="panel">
+          <div class="panel-head"><h3>Site actuel</h3><span>road-to-p1.com</span></div>
+          <div class="panel-body site-card"><div class="site-screen"><span>ROAD TO P1</span><b>Site officiel</b><small>Zone de contrôle Web Design</small></div><a class="btn ghost" href="https://road-to-p1.com" target="_blank" rel="noopener">Ouvrir le site ↗</a></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Nouvelle modification</h3><span>À préparer</span></div>
+          <div class="panel-body form-grid">
+            <label>Page<select id="webPage"><option>Accueil</option><option>Lara</option><option>Aaron</option><option>Partenaires</option><option>Résultats</option><option>Actualités</option><option>Contact</option><option>Autre</option></select></label>
+            <label>Priorité<select id="webPriority"><option>Haute</option><option selected>Normale</option><option>Basse</option></select></label>
+            <label class="span2">Titre<input id="webTitle" placeholder="Ex. Mettre à jour la page Lara"></label>
+            <label class="span2">Description<textarea id="webDesc" placeholder="Décrire précisément la modification attendue..."></textarea></label>
+            <div class="actions span2"><button class="btn primary" id="webSave">Ajouter à la liste</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel web-backlog"><div class="panel-head"><h3>Modifications du site</h3><span id="webCount">0 demande</span></div><div class="panel-body"><div id="webList" class="stack-list"></div></div></div>
+    </section>
+
+    <section class="view" id="view-training">
+      <div class="training-layout">
+        <div class="panel training-setup">
+          <div class="panel-head"><h3>Session</h3><span>Préparer l’interview</span></div>
+          <div class="panel-body form-grid onecol">
+            <label>Pilote<select id="trPilot"><option>Lara</option><option>Aaron</option></select></label>
+            <label>Langue<select id="trLang"><option value="fr">Français</option><option value="en">English</option></select></label>
+            <label>Format<select id="trFormat"><option value="race">Interview après course</option><option value="sponsor">Interview partenaire</option><option value="quick">Interview rapide</option></select></label>
+            <button class="btn primary" id="trStart">Nouvelle question</button>
+          </div>
+        </div>
+        <div class="panel training-main">
+          <div class="question-head"><span id="trBadge">LARA • FR</span><small id="trFormatLabel">Interview après course</small></div>
+          <div class="question" id="trQuestion">Choisissez une session puis cliquez sur « Nouvelle question ».</div>
+          <textarea id="trAnswer" class="answer" placeholder="Réponse du pilote..."></textarea>
+          <div class="training-actions"><button class="btn" id="trMic">🎙 Dicter la réponse</button><button class="btn" id="trStop">■ Arrêter</button><button class="btn primary" id="trEvaluate">Évaluer la réponse</button></div>
+          <div class="voice-hint" id="trHint">La dictée vocale utilise la reconnaissance du navigateur lorsqu’elle est disponible.</div>
+          <div id="trEvaluation" class="evaluation empty-eval">Aucune évaluation pour le moment.</div>
+        </div>
+      </div>
+      <div class="panel training-history"><div class="panel-head"><h3>Historique d’entraînement</h3><span id="trCount">0 session</span></div><div class="panel-body"><div id="trList" class="stack-list"></div></div></div>
+    </section>
+
+    <footer>ROAD TO P1 Media • V1.0.0 • Données enregistrées localement dans ce navigateur</footer>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+<script src="app.js?v=100"></script>
+</body>
+</html>
