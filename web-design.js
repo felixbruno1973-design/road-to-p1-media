@@ -42,7 +42,9 @@
     $('wdApply').disabled = value || !previewReady || !$('wdApproval').checked || current?.status !== 'pending';
   }
   async function api(path, body) {
-    const response = await fetch(API + path, {method:body===undefined?'GET':'POST', cache:'no-store', signal:AbortSignal.timeout(120000), headers:{'X-RTP1-Key':key,...(body instanceof FormData?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:body instanceof FormData?body:JSON.stringify(body)})});
+    let response;
+    try { response = await fetch(API + path, {method:body===undefined?'GET':'POST', cache:'no-store', signal:AbortSignal.timeout(120000), headers:{'X-RTP1-Key':key,...(body instanceof FormData?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:body instanceof FormData?body:JSON.stringify(body)})}); }
+    catch { throw new Error('Connexion interrompue. Vérifiez votre connexion et consultez l’historique avant de réessayer une publication.'); }
     const data = await response.json().catch(()=>({}));
     if (!response.ok || !data.ok) {
       if (response.status === 401) { key=''; connected=false; $('wdKey').hidden=false; $('wdConnectForm').hidden=false; }
