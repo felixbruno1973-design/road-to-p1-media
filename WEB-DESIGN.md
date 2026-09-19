@@ -22,6 +22,7 @@ Les brouillons sont privés, stockés dans WordPress et valables une heure. Les 
 
 - Authentification sur toutes les routes de données, analyse, dictée et écriture ; contrôle d’origine ; aucune identité WordPress dans le diagnostic public.
 - Plans structurés uniquement. WordPress revalide les identifiants, types, unités et opérations. Le navigateur ne fournit jamais le contenu à publier.
+- Les définitions identiques de réglages sont partagées dans le contexte d’analyse, sans perdre de valeurs. Une proposition refusée par le validateur peut être corrigée une seule fois avec les réglages réellement disponibles. Un conflit ou une erreur de connexion ne déclenche jamais cette correction automatique.
 - Empreinte incluant Elementor, réglages de page, titre, contenu, statut et dates, vérifiée sous verrous de lignes InnoDB au moment de l’écriture.
 - Écriture et reçu de sauvegarde dans une seule transaction. Sans stockage transactionnel, publication bloquée.
 - Publication et annulation idempotentes. Après interruption réseau, relire l’historique plutôt que réécrire.
@@ -46,5 +47,7 @@ php tests/backend.php
 ```
 
 La suite PHP utilise SQLite pour tester transactions et états avec le code de l’extension. Elle ne remplace pas un test de concurrence sur MySQL/InnoDB. Les tests n’écrivent pas sur road-to-p1.com.
+
+Vérification en ligne le 19 septembre 2026 : connexion, liste des pages, historique, génération d’un brouillon réel pour l’accueil et aperçu isolé. Espacement supérieur mesuré dans l’aperçu : mobile 120 → 80 px ; tablette 120 → 120 px ; ordinateur 150 → 150 px. Publication désactivée avant aperçu et tant que la validation n’est pas cochée. Aucun changement éditorial publié pendant ces tests. Publication, sauvegarde et retour arrière vérifiés avec la suite PHP ; dictée au microphone et écriture sur le site réel restent à vérifier lors d’une utilisation explicitement validée.
 
 Documentation : [Cloudflare JSON mode](https://developers.cloudflare.com/workers-ai/features/json-mode/), [Whisper](https://developers.cloudflare.com/workers-ai/models/whisper-large-v3-turbo/), [WordPress REST](https://developer.wordpress.org/rest-api/extending-the-rest-api/adding-custom-endpoints/), [Elementor CSS](https://github.com/elementor/elementor/blob/main/core/files/css/post.php), [OpenAI Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs).

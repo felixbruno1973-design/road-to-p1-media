@@ -66,11 +66,17 @@
     if(typeof value==='object') { if('size' in value) return `${value.size} ${value.unit||''}`; return Object.entries(value).map(([k,v])=>`${k} : ${v}`).join(' · '); }
     return value===''?'Non défini':String(value);
   }
+  function changeLabel(change) {
+    const names = {'padding-top':'Espacement supérieur','padding-bottom':'Espacement inférieur','padding-left':'Espacement à gauche','padding-right':'Espacement à droite',padding:'Espacement intérieur',margin:'Marge extérieure','margin-top':'Marge supérieure','margin-bottom':'Marge inférieure','margin-left':'Marge à gauche','margin-right':'Marge à droite','min-height':'Hauteur minimale','max-height':'Hauteur maximale',height:'Hauteur',width:'Largeur','max-width':'Largeur maximale',color:'Couleur du texte','background-color':'Couleur de fond','font-size':'Taille du texte','font-weight':'Épaisseur du texte','line-height':'Interligne','letter-spacing':'Espacement des lettres','text-align':'Alignement du texte',gap:'Espacement entre les éléments','row-gap':'Espacement entre les lignes','column-gap':'Espacement entre les colonnes','border-radius':'Arrondi des angles',display:'Affichage du bloc'};
+    const property = change.label.split(' · ').at(-1);
+    const label = names[property] || change.label;
+    return `${change.element === 'HTML' ? 'Bloc de la page' : change.element} · ${label}`;
+  }
   function showDraft(draft) {
     current=draft; clearPreview(); localStorage.setItem('rtp1ActiveDraft',draft.id);
     $('wdDraft').hidden=false; $('wdSummary').textContent=draft.summary; $('wdDraftStatus').textContent=stateLabel(draft);
     $('wdTarget').textContent=`${draft.page.title} · ${devices[draft.device]} · Brouillon valable jusqu’à ${new Date(draft.expiresAt*1000).toLocaleTimeString('fr-FR')}`;
-    $('wdDiff').innerHTML=draft.diff.map(c=>`<article class="wd-change"><b>${esc(c.element)} · ${esc(c.label)}</b><span class="pill">${esc(devices[c.device])}</span><div class="wd-values"><div><small>AVANT</small><p>${esc(valueLabel(c.before))}</p></div><div><small>APRÈS PROPOSÉ</small><p>${esc(valueLabel(c.after))}</p></div></div><p>${esc(c.reason)}</p></article>`).join('');
+    $('wdDiff').innerHTML=draft.diff.map(c=>`<article class="wd-change"><b>${esc(changeLabel(c))}</b><span class="pill">${esc(devices[c.device])}</span><div class="wd-values"><div><small>AVANT</small><p>${esc(valueLabel(c.before))}</p></div><div><small>APRÈS PROPOSÉ</small><p>${esc(valueLabel(c.after))}</p></div></div><p>${esc(c.reason)}</p></article>`).join('');
     $('wdViewport').value=({mobile:'390',tablet:'820',desktop:'1280',all:'1280'})[draft.device]; sizePreview();
     $('wdPreviewNote').textContent='Chargez puis vérifiez l’aperçu pour activer la validation.';
     $('wdLoadPreview').hidden=draft.status!=='pending'; $('wdApprovalLabel').hidden=draft.status!=='pending'; $('wdApply').hidden=draft.status!=='pending'; $('wdReject').hidden=draft.status!=='pending';
