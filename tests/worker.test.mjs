@@ -101,3 +101,30 @@ test('Cloudflare AI works without an OpenAI key and still validates the plan',as
   const AI={run:async(m,p)=>{model=m;params=p;return {response:{summary:'Hauteur',clarification:'',changes:[change]}};}};
   try {const res=await worker.fetch(request('/draft',{pageId:10,instruction:'Réduire la hauteur mobile',device:'mobile'}),{...env,OPENAI_API_KEY:undefined,AI});assert.equal(res.status,200);assert.equal(model,'@cf/meta/llama-3.3-70b-instruct-fp8-fast');assert.equal(params.response_format.type,'json_schema');assert.equal(stored.revision,'r1');}finally{globalThis.fetch=prior;}
 });
+
+test('a rejected draft is corrected once using the same snapshot, never published',async()=>{
+  const prior=globalThis.fetch;let plans=0,drafts=0,snapshots=0;
+  const AI={run:async(_model,p)=>{plans++;if(plans===2){assert.match(p.messages.at(-1).content,/Affichage incompatible/);assert.equal(p.messages.at(-2).role,'assistant');}return {response:{summary:'Espacement',clarification:'',changes:[change]}};}};
+  globalThis.fetch=async(url,options)=>{
+    if(url.endsWith('/quota'))return json({ok:true});
+    if(url.includes('/snapshot/')){snapshots++;return json({revision:'initial',page:{id:10},elements:[]});}
+    assert.ok(url.endsWith('/draft'));assert.equal(JSON.parse(options.body).revision,'initial');
+    return ++drafts===1?json({message:'Affichage incompatible avec le réglage.'},422):json({ok:true,draft:{id:'test'}});
+  };
+  try {assert.equal((await worker.fetch(request('/draft',{pageId:10,instruction:'Réduire l’espace mobile',device:'mobile'}),{...env,OPENAI_API_KEY:undefined,AI})).status,200);assert.equal(plans,2);assert.equal(drafts,2);assert.equal(snapshots,1);}finally{globalThis.fetch=prior;}
+});
+
+test('draft correction stops on repeated validation errors, conflicts and uncertain failures',async()=>{
+  const prior=globalThis.fetch;
+  try {for(const status of [422,409,502]) {
+    let plans=0,drafts=0;
+    const AI={run:async()=>{plans++;return {response:{summary:'Espacement',clarification:'',changes:[change]}};}};
+    globalThis.fetch=async(url)=>{
+      if(url.endsWith('/quota'))return json({ok:true});
+      if(url.includes('/snapshot/'))return json({revision:'initial',page:{id:10},elements:[]});
+      assert.ok(url.endsWith('/draft'));drafts++;return json({message:'Refus'},status);
+    };
+    assert.equal((await worker.fetch(request('/draft',{pageId:10,instruction:'Réduire l’espace mobile',device:'mobile'}),{...env,OPENAI_API_KEY:undefined,AI})).status,status);
+    assert.equal(plans,status===422?2:1);assert.equal(drafts,plans);
+  }}finally{globalThis.fetch=prior;}
+});
