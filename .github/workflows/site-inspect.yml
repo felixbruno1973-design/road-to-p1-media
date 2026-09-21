@@ -1,0 +1,78 @@
+name: ROAD TO P1 Inspect Elementor Page
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - site-inspect.json
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    env:
+      WP_URL: https://road-to-p1.com
+      WP_USERNAME: roadtop1-media
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect page structure
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          PATH_REQ="$(jq -r '.page_path' site-inspect.json)"
+          CODE="$(curl -sS -o pages.json -w '%{http_code}' \
+            -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" \
+            -H "Accept: application/json" \
+            "$WP_URL/wp-json/rtp1-media/v1/pages")"
+          [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || { cat pages.json; exit 1; }
+
+          PAGE_ID="$(python - <<'PY'
+          import json
+          from urllib.parse import urlparse
+          req=json.load(open("site-inspect.json",encoding="utf-8"))
+          data=json.load(open("pages.json",encoding="utf-8"))
+          target=req["page_path"].rstrip("/") or "/"
+          ms=[p for p in data.get("pages",[]) if (urlparse(p.get("link","")).path.rstrip("/") or "/")==target]
+          if len(ms)!=1: raise SystemExit(f"Expected one page, found {len(ms)}")
+          print(ms[0]["id"])
+          PY
+          )"
+          echo "PAGE_ID=$PAGE_ID"
+
+          CODE="$(curl -sS -o page.json -w '%{http_code}' \
+            -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" \
+            -H "Accept: application/json" \
+            "$WP_URL/wp-json/wp/v2/pages/$PAGE_ID?context=edit")"
+          [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || { cat page.json; exit 1; }
+
+          python - <<'PY'
+          import json, re
+          p=json.load(open("page.json",encoding="utf-8"))
+          meta=(p.get("meta") or {}).get("_elementor_data")
+          if isinstance(meta,str):
+              data=json.loads(meta)
+          else:
+              data=meta
+          def clean(s):
+              if not isinstance(s,str): return ""
+              s=re.sub(r"<[^>]+>"," ",s)
+              s=re.sub(r"\s+"," ",s).strip()
+              return s[:220]
+          keys=("title","editor","text","html","button_text","heading","description")
+          def walk(nodes,depth=0,parent=""):
+              for i,n in enumerate(nodes or []):
+                  st=n.get("settings") or {}
+                  vals=[]
+                  for k in keys:
+                      if k in st and st[k]:
+                          vals.append(f"{k}={clean(st[k])!r}")
+                  print("  "*depth+f"- id={n.get('id')} elType={n.get('elType')} widgetType={n.get('widgetType')} parent={parent} "+(" | ".join(vals)))
+                  walk(n.get("elements") or [],depth+1,n.get("id",""))
+          print("TITLE:",(p.get("title") or {}).get("raw"))
+          print("SLUG:",p.get("slug"))
+          walk(data)
+          PY
