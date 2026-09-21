@@ -1,0 +1,121 @@
+name: ROAD TO P1 Fix EN Partners Mobile Center
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - fix-en-partners-mobile.json
+
+permissions:
+  contents: read
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    env:
+      WP_URL: https://road-to-p1.com
+      WP_USERNAME: roadtop1-media
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch page
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CODE="$(curl -sS -o before.json -w '%{http_code}'             -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"             -H "Accept: application/json"             "$WP_URL/wp-json/wp/v2/pages/10517?context=edit")"
+          echo "Read -> HTTP $CODE"
+          [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || exit 1
+
+      - name: Backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: english-partners-before-mobile-center-${{ github.run_id }}
+          path: before.json
+          retention-days: 30
+
+      - name: Build mobile-only correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          p=json.load(open("before.json",encoding="utf-8"))
+          raw=(p.get("meta") or {}).get("_elementor_data")
+          if not isinstance(raw,str):
+              raise SystemExit("Safety stop: Elementor data unavailable")
+          data=json.loads(raw)
+          found={}
+          def walk(nodes):
+              for n in nodes or []:
+                  if n.get("id") in {"8f33e70","2f26c83"}:
+                      found[n.get("id")]=n
+                  walk(n.get("elements") or [])
+          walk(data)
+          if set(found)!={"8f33e70","2f26c83"}:
+              raise SystemExit("Safety stop: expected containers not found")
+
+          outer=found["8f33e70"].setdefault("settings",{})
+          text=found["2f26c83"].setdefault("settings",{})
+
+          # Mobile-only overrides. Desktop values are left untouched.
+          outer["margin_mobile"]={"unit":"px","top":"0","right":"0","bottom":"0","left":"0","isLinked":True}
+          outer["flex_direction_mobile"]="column"
+          text["margin_mobile"]={"unit":"px","top":"0","right":"0","bottom":"0","left":"0","isLinked":True}
+          text["width_mobile"]={"unit":"%","size":100,"sizes":[]}
+          text["_element_width_mobile"]="initial"
+          text["_element_custom_width_mobile"]={"unit":"%","size":100,"sizes":[]}
+
+          payload={"meta":{"_elementor_data":json.dumps(data,ensure_ascii=False,separators=(",",":"))}}
+          json.dump(payload,open("update.json","w",encoding="utf-8"),ensure_ascii=False,separators=(",",":"))
+          print("Prepared mobile-only centering fix; desktop settings preserved.")
+          PY
+
+      - name: Publish
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          OK=0
+          for METHOD in PUT PATCH POST; do
+            for ATTEMPT in 1 2 3 4; do
+              CODE="$(curl -sS -o response.json -w '%{http_code}'                 -X "$METHOD"                 -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"                 -H "Content-Type: application/json"                 --data-binary @update.json                 "$WP_URL/wp-json/wp/v2/pages/10517")"
+              echo "$METHOD attempt $ATTEMPT -> HTTP $CODE"
+              if [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ]; then OK=1; break 2; fi
+              sleep 4
+            done
+          done
+          [ "$OK" = "1" ] || exit 1
+
+      - name: Verify stored mobile settings
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          curl -sS -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" -H "Accept: application/json" "$WP_URL/wp-json/wp/v2/pages/10517?context=edit" > after.json
+          jq -r '.meta._elementor_data' after.json > el.json
+          python - <<'PY'
+          import json
+          d=json.load(open("el.json",encoding="utf-8"))
+          found={}
+          def walk(nodes):
+              for n in nodes or []:
+                  if n.get("id") in {"8f33e70","2f26c83"}:
+                      found[n.get("id")]=n
+                  walk(n.get("elements") or [])
+          walk(d)
+          o=found["8f33e70"]["settings"]
+          t=found["2f26c83"]["settings"]
+          checks={
+              "outer_mobile_margin_zero": all(o["margin_mobile"][k]=="0" for k in ("top","right","bottom","left")),
+              "outer_mobile_column": o.get("flex_direction_mobile")=="column",
+              "text_mobile_margin_zero": all(t["margin_mobile"][k]=="0" for k in ("top","right","bottom","left")),
+              "text_mobile_width_100": t.get("width_mobile",{}).get("size")==100,
+              "desktop_margin_preserved": t.get("margin",{}).get("top")=="-143"
+          }
+          for k,v in checks.items(): print(f"{k}: {v}")
+          if not all(checks.values()): raise SystemExit("Verification failed")
+          PY
