@@ -1,0 +1,163 @@
+name: ROAD TO P1 Fix Desktop Partner Images
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - partners-desktop-images.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: road-to-p1-partners-desktop-images
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    env:
+      WP_URL: https://road-to-p1.com
+      WP_USERNAME: roadtop1-media
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate command
+        run: |
+          set -euo pipefail
+          jq -e '.confirm == true and .page_id == 11 and (.card_ids|length)==5' partners-desktop-images.json >/dev/null
+
+      - name: Read current page
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CODE="$(curl -sS -o before.json -w '%{http_code}'             -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"             -H "Accept: application/json"             "$WP_URL/wp-json/wp/v2/pages/11?context=edit")"
+          [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || { cat before.json; exit 1; }
+
+      - name: Backup current page
+        uses: actions/upload-artifact@v4
+        with:
+          name: partenaires-before-desktop-image-fix-${{ github.run_id }}
+          path: before.json
+          retention-days: 30
+
+      - name: Build desktop-only image framing update
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > build.py <<'PY'
+import json,sys
+p=json.load(open("before.json",encoding="utf-8"))
+meta=(p.get("meta") or {}).get("_elementor_data")
+if not isinstance(meta,str):
+    raise SystemExit("Safety stop: Elementor data unavailable")
+data=json.loads(meta)
+
+intro_id="c63e02a"
+card_ids=["49caa96","5eb18ed","2394503","3458751","da8e127"]
+found={}
+def walk(nodes):
+    for n in nodes or []:
+        if n.get("id") in [intro_id,*card_ids]:
+            found[n.get("id")]=n
+        walk(n.get("elements") or [])
+walk(data)
+if set(found)!={intro_id,*card_ids}:
+    raise SystemExit(f"Safety stop: missing expected elements: {set([intro_id,*card_ids])-set(found)}")
+
+for eid in card_ids:
+    n=found[eid]
+    if n.get("widgetType")!="image-box":
+        raise SystemExit(f"Safety stop: {eid} is not image-box")
+
+intro=found[intro_id]
+if intro.get("widgetType")!="text-editor":
+    raise SystemExit("Safety stop: intro target is not text-editor")
+html=(intro.get("settings") or {}).get("editor","")
+
+marker="/* RTP1_DESKTOP_PARTNER_IMAGES_V1 */"
+css='''<style>
+/* RTP1_DESKTOP_PARTNER_IMAGES_V1 */
+@media (min-width:1025px){
+  .elementor-11 .elementor-element.elementor-element-49caa96 .elementor-image-box-img,
+  .elementor-11 .elementor-element.elementor-element-5eb18ed .elementor-image-box-img,
+  .elementor-11 .elementor-element.elementor-element-2394503 .elementor-image-box-img,
+  .elementor-11 .elementor-element.elementor-element-3458751 .elementor-image-box-img,
+  .elementor-11 .elementor-element.elementor-element-da8e127 .elementor-image-box-img{
+    height:150px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    margin:0 0 20px!important;
+    overflow:hidden;
+  }
+  .elementor-11 .elementor-element.elementor-element-49caa96 .elementor-image-box-img img,
+  .elementor-11 .elementor-element.elementor-element-5eb18ed .elementor-image-box-img img,
+  .elementor-11 .elementor-element.elementor-element-2394503 .elementor-image-box-img img,
+  .elementor-11 .elementor-element.elementor-element-3458751 .elementor-image-box-img img,
+  .elementor-11 .elementor-element.elementor-element-da8e127 .elementor-image-box-img img{
+    display:block;
+    width:auto!important;
+    height:auto!important;
+    max-width:220px!important;
+    max-height:130px!important;
+    object-fit:contain!important;
+    object-position:center center!important;
+  }
+}
+</style>'''
+
+if marker in html:
+    start=html.index("<style>", html.index(marker)-20 if html.index(marker)>=20 else 0)
+    end=html.index("</style>", html.index(marker))+8
+    html=html[:start]+css+html[end:]
+else:
+    html=css+"\n"+html
+intro.setdefault("settings",{})["editor"]=html
+
+# Desktop card widths kept uniform; tablet/mobile settings untouched.
+for eid in card_ids:
+    s=found[eid].setdefault("settings",{})
+    s["_element_custom_width"]={"unit":"px","size":290,"sizes":[]}
+    s["image_size"]={"unit":"%","size":100,"sizes":[]}
+
+json.dump({"meta":{"_elementor_data":json.dumps(data,ensure_ascii=False,separators=(",",":"))}},
+          open("update.json","w",encoding="utf-8"),ensure_ascii=False,separators=(",",":"))
+print("Prepared desktop-only framing CSS; mobile and tablet rules unchanged.")
+PY
+          python build.py
+
+      - name: Publish with retries
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          OK=0
+          for ATTEMPT in 1 2 3 4 5; do
+            CODE="$(curl -sS -o response.json -w '%{http_code}'               -X POST               -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"               -H "Content-Type: application/json"               --data-binary @update.json               "$WP_URL/wp-json/wp/v2/pages/11")"
+            echo "Attempt $ATTEMPT -> HTTP $CODE"
+            if [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ]; then OK=1; break; fi
+            sleep 5
+          done
+          if [ "$OK" != "1" ]; then
+            jq . response.json 2>/dev/null || cat response.json
+            exit 1
+          fi
+
+      - name: Verify stored desktop-only rules
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CODE="$(curl -sS -o after.json -w '%{http_code}'             -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"             -H "Accept: application/json"             "$WP_URL/wp-json/wp/v2/pages/11?context=edit")"
+          [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || exit 1
+          jq -r '.meta._elementor_data' after.json > elementor.json
+          INTRO_OK="$(jq '[..|objects|select(.id?=="c63e02a")|.settings.editor|contains("RTP1_DESKTOP_PARTNER_IMAGES_V1")]|any' elementor.json)"
+          MOBILE_UNTOUCHED="$(jq '[..|objects|select(.id? as $id | ["49caa96","5eb18ed","2394503","3458751","da8e127"]|index($id))|select(.settings.image_size_mobile.size==68)]|length==5' elementor.json)"
+          echo "Desktop CSS stored: $INTRO_OK"
+          echo "Mobile image sizing preserved: $MOBILE_UNTOUCHED"
+          [ "$INTRO_OK" = "true" ] && [ "$MOBILE_UNTOUCHED" = "true" ]
