@@ -1,0 +1,104 @@
+name: ROAD TO P1 Sync English Partners
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - sync-partners-en.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: road-to-p1-sync-english-partners
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      WP_URL: https://road-to-p1.com
+      WP_USERNAME: roadtop1-media
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate command
+        run: |
+          set -euo pipefail
+          jq -e '.confirm == true and .source_fr_page_id == 11 and .target_en_page_id == 10517' sync-partners-en.json >/dev/null
+
+      - name: Read current French and English pages
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for SPEC in "11:fr.json" "10517:en-before.json"; do
+            ID="${SPEC%%:*}"
+            OUT="${SPEC#*:}"
+            CODE="$(curl -sS -o "$OUT" -w '%{http_code}'               -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"               -H "Accept: application/json"               "$WP_URL/wp-json/wp/v2/pages/$ID?context=edit")"
+            echo "Read page $ID -> HTTP $CODE"
+            [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || exit 1
+          done
+
+      - name: Backup English partners page
+        uses: actions/upload-artifact@v4
+        with:
+          name: english-partners-before-sync-${{ github.run_id }}
+          path: en-before.json
+          retention-days: 30
+
+      - name: Build strict aligned English page
+        run: python scripts/sync_english_partners.py
+
+      - name: Publish with alternate REST methods
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          OK=0
+          for METHOD in PUT PATCH POST; do
+            for ATTEMPT in 1 2 3 4; do
+              CODE="$(curl -sS -o response.json -w '%{http_code}'                 -X "$METHOD"                 -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"                 -H "Content-Type: application/json"                 --data-binary @en-partners-update.json                 "$WP_URL/wp-json/wp/v2/pages/10517")"
+              echo "$METHOD attempt $ATTEMPT -> HTTP $CODE"
+              if [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ]; then OK=1; break 2; fi
+              sleep 4
+            done
+          done
+          [ "$OK" = "1" ] || { echo "::error::English partners write blocked."; exit 1; }
+
+      - name: Verify stored English page
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CODE="$(curl -sS -o en-after.json -w '%{http_code}'             -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"             -H "Accept: application/json"             "$WP_URL/wp-json/wp/v2/pages/10517?context=edit")"
+          [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || exit 1
+          jq -r '.meta._elementor_data' en-after.json > en-elementor.json
+
+          python - <<'PY'
+          import json
+          d=json.load(open("en-elementor.json",encoding="utf-8"))
+          s=json.dumps(d,ensure_ascii=False)
+          checks={
+            "heading":"Your support makes a tangible difference" in s,
+            "contributions":"What are contributions used for?" in s,
+            "partnership":"A partnership that should also be useful to you" in s,
+            "supporters":"They support ROAD TO P1" in s,
+            "dgkart":"Image9.png" in s,
+            "hautem":"logo-hautem.jpg" in s,
+            "alfano":"Image10.png" in s,
+            "emos":"Image1.png" in s,
+            "kartrace":"LOGO-KART-RACE.png" in s,
+            "same_slideshow":"Screenshot-2026-01-03-at-10-24-52-Instagram-1.png" in s,
+            "no_old_ufolep":"logo-UFOLEP.jpg" not in s and "logo-UFOLEP-kart-Aquitaine.jpg" not in s,
+            "no_pressbook":"Pressbook" not in s,
+            "english_contact":"https://road-to-p1.com/en/home/#contact" in s,
+            "mobile_parity":".elementor-10517 .elementor-element.elementor-element-2f26c83" in s,
+          }
+          for k,v in checks.items(): print(f"{k}: {v}")
+          if not all(checks.values()):
+              raise SystemExit("Stored English partners verification failed")
+          PY
