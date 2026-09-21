@@ -91,3 +91,16 @@ def wt(nodes,parent=""):
             print(json.dumps({"id":n.get("id"),"parent":parent,"widgetType":n.get("widgetType"),"setting_keys":sorted((n.get("settings") or {}).keys())[:80]},ensure_ascii=False))
         wt(n.get("elements") or [],n.get("id",""))
 wt(d)
+
+print("=== EN WIDGET TREE TYPES ===")
+p,d=page(9968)
+wt(d)
+print("=== FORM SETTINGS FR EN ===")
+for pid,label in [(10,"FR"),(9968,"EN")]:
+    p,d=page(pid)
+    def walk_forms(nodes):
+        for n in nodes or []:
+            if n.get("widgetType")=="fluent-form-widget":
+                print(label,json.dumps({"id":n.get("id"),"settings":n.get("settings")},ensure_ascii=False))
+            walk_forms(n.get("elements") or [])
+    walk_forms(d)
