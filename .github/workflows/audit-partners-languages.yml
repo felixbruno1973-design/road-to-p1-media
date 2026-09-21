@@ -1,0 +1,34 @@
+name: ROAD TO P1 Audit FR EN Partners
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - partners-language-audit.json
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    env:
+      WP_URL: https://road-to-p1.com
+      WP_USERNAME: roadtop1-media
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch pages
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for ID in 11 10517; do
+            CODE="$(curl -sS -o "page-$ID.json" -w '%{http_code}'               -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"               -H "Accept: application/json"               "$WP_URL/wp-json/wp/v2/pages/$ID?context=edit")"
+            echo "Page $ID -> HTTP $CODE"
+            [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || exit 1
+          done
+
+      - name: Summarize structures and content
+        run: python scripts/audit_partners_languages.py
