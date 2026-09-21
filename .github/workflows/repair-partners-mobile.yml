@@ -1,0 +1,109 @@
+name: ROAD TO P1 Repair Partenaires Mobile Text
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - repair-partners-mobile.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: road-to-p1-repair-partners-mobile
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    env:
+      WP_URL: https://road-to-p1.com
+      WP_USERNAME: roadtop1-media
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate command
+        run: |
+          set -euo pipefail
+          jq -e '.confirm == true and .page_id == 11 and .target_id == "2f26c83"' repair-partners-mobile.json >/dev/null
+
+      - name: Read current page
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CODE="$(curl -sS -o before.json -w '%{http_code}'             -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"             -H "Accept: application/json"             "$WP_URL/wp-json/wp/v2/pages/11?context=edit")"
+          [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || { cat before.json; exit 1; }
+
+      - name: Backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: partenaires-before-mobile-repair-${{ github.run_id }}
+          path: before.json
+          retention-days: 30
+
+      - name: Build mobile-only repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          p=json.load(open("before.json",encoding="utf-8"))
+          raw=(p.get("meta") or {}).get("_elementor_data")
+          if not isinstance(raw,str):
+              raise SystemExit("Safety stop: Elementor data unavailable")
+          data=json.loads(raw)
+          matches=[]
+          def walk(nodes):
+              for n in nodes or []:
+                  if n.get("id")=="2f26c83":
+                      matches.append(n)
+                  walk(n.get("elements") or [])
+          walk(data)
+          if len(matches)!=1:
+              raise SystemExit(f"Safety stop: expected one target, found {len(matches)}")
+          n=matches[0]
+          if n.get("elType")!="container":
+              raise SystemExit("Safety stop: target is not a container")
+          s=n.setdefault("settings",{})
+          # Preserve every desktop setting, especially the user's manual -143px desktop margin.
+          s["margin_mobile"]={"unit":"px","top":"0","right":"0","bottom":"0","left":"0","isLinked":True}
+          s["width_mobile"]={"unit":"%","size":100,"sizes":[]}
+          json.dump({"meta":{"_elementor_data":json.dumps(data,ensure_ascii=False,separators=(",",":"))}},
+                    open("update.json","w",encoding="utf-8"),ensure_ascii=False,separators=(",",":"))
+          print("Prepared mobile-only override: margin 0, width 100%. Desktop settings preserved.")
+          PY
+
+      - name: Publish with retries
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          OK=0
+          for ATTEMPT in 1 2 3 4 5 6 7 8; do
+            CODE="$(curl -sS -o response.json -w '%{http_code}'               -X POST               -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"               -H "Content-Type: application/json"               --data-binary @update.json               "$WP_URL/wp-json/wp/v2/pages/11")"
+            echo "Attempt $ATTEMPT -> HTTP $CODE"
+            if [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ]; then OK=1; break; fi
+            sleep 5
+          done
+          if [ "$OK" != "1" ]; then
+            echo "::error::WordPress write blocked after retries."
+            exit 1
+          fi
+
+      - name: Verify mobile settings only
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CODE="$(curl -sS -o after.json -w '%{http_code}'             -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"             -H "Accept: application/json"             "$WP_URL/wp-json/wp/v2/pages/11?context=edit")"
+          [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || exit 1
+          jq -r '.meta._elementor_data' after.json > elementor.json
+          OK="$(jq '[..|objects|select(.id?=="2f26c83")|(.settings.margin_mobile.top=="0" and .settings.margin_mobile.right=="0" and .settings.margin_mobile.bottom=="0" and .settings.margin_mobile.left=="0" and .settings.width_mobile.size==100)]|any' elementor.json)"
+          DESKTOP="$(jq '[..|objects|select(.id?=="2f26c83")|(.settings.margin.top=="-143" and .settings.margin.right=="-143" and .settings.margin.bottom=="-143" and .settings.margin.left=="-143")]|any' elementor.json)"
+          echo "Mobile repair verified: $OK"
+          echo "Desktop manual layout preserved: $DESKTOP"
+          [ "$OK" = "true" ] && [ "$DESKTOP" = "true" ]
