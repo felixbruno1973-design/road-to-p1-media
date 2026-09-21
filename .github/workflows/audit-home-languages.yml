@@ -1,0 +1,118 @@
+name: ROAD TO P1 Audit FR EN Homepages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - home-language-audit.json
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    env:
+      WP_URL: https://road-to-p1.com
+      WP_USERNAME: roadtop1-media
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch pages and media
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for ID in 10 9968; do
+            curl -sS -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"               -H "Accept: application/json"               "$WP_URL/wp-json/wp/v2/pages/$ID?context=edit" > "page-$ID.json"
+          done
+          curl -sS -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"             -H "Accept: application/json"             "$WP_URL/wp-json/rtp1-media/v1/pages" > pages.json
+          curl -sS -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"             -H "Accept: application/json"             "$WP_URL/wp-json/wp/v2/media?per_page=100&media_type=application&search=Flyer" > media-flyer.json || true
+          curl -sS -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"             -H "Accept: application/json"             "$WP_URL/wp-json/wp/v2/media?per_page=100&search=2027" > media-2027.json || true
+
+      - name: Summarize structures, texts and links
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > audit.py <<'PY'
+import json,re,html
+from urllib.parse import urlparse
+
+def page(pid):
+    p=json.load(open(f"page-{pid}.json",encoding="utf-8"))
+    raw=(p.get("meta") or {}).get("_elementor_data")
+    data=json.loads(raw) if isinstance(raw,str) else raw
+    return p,data
+
+def strip(x):
+    if not isinstance(x,str): return ""
+    x=re.sub(r"<style.*?</style>"," ",x,flags=re.I|re.S)
+    x=re.sub(r"<script.*?</script>"," ",x,flags=re.I|re.S)
+    x=re.sub(r"<[^>]+>"," ",x)
+    x=html.unescape(x)
+    x=re.sub(r"s+"," ",x).strip()
+    return x
+
+def links_from_text(s):
+    if not isinstance(s,str): return []
+    return re.findall(r'href=["\']([^"\']+)["\']',s,re.I)
+
+def walk(nodes,out,parent=""):
+    for n in nodes or []:
+        st=n.get("settings") or {}
+        rec={"id":n.get("id"),"elType":n.get("elType"),"widgetType":n.get("widgetType"),"parent":parent}
+        vals=[]
+        for k in ("title","title_text","text","editor","html","description_text","button_text"):
+            if st.get(k):
+                vals.append((k,strip(st[k])[:700]))
+        if isinstance(st.get("link"),dict) and st["link"].get("url"):
+            vals.append(("link",st["link"]["url"]))
+        hrefs=[]
+        for k in ("editor","html"):
+            hrefs += links_from_text(st.get(k))
+        if hrefs:
+            vals.append(("hrefs",hrefs))
+        if vals:
+            rec["values"]=vals
+            out.append(rec)
+        walk(n.get("elements") or [],out,n.get("id",""))
+
+for pid,label in [(10,"FR"),(9968,"EN")]:
+    p,d=page(pid)
+    print(f"=== {label} PAGE {pid} title={p.get('title',{}).get('raw')} slug={p.get('slug')} ===")
+    out=[]
+    walk(d,out)
+    for r in out:
+        print(json.dumps(r,ensure_ascii=False))
+
+print("=== PAGE DIRECTORY MATCHES ===")
+pages=json.load(open("pages.json",encoding="utf-8"))
+for p in pages.get("pages",[]):
+    link=p.get("link","")
+    title=p.get("title","")
+    path=urlparse(link).path
+    low=(str(title)+" "+path).lower()
+    if any(k in low for k in ["home","accueil","lara","aaron","partenaire","partner","calend","classe","rank","result","saison","season"]):
+        print(json.dumps({"id":p.get("id"),"title":title,"link":link,"path":path},ensure_ascii=False))
+
+for fn in ("media-flyer.json","media-2027.json"):
+    print("===",fn,"===")
+    try:
+        data=json.load(open(fn,encoding="utf-8"))
+    except Exception as e:
+        print("ERR",e); continue
+    if isinstance(data,list):
+        for m in data:
+            print(json.dumps({
+                "id":m.get("id"),
+                "date":m.get("date"),
+                "slug":m.get("slug"),
+                "title":(m.get("title") or {}).get("rendered"),
+                "source_url":m.get("source_url"),
+                "mime_type":m.get("mime_type")
+            },ensure_ascii=False))
+    else:
+        print(json.dumps(data,ensure_ascii=False)[:3000])
+PY
+          python audit.py
