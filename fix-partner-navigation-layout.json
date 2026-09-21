@@ -1,0 +1,17 @@
+{
+  "confirm": true,
+  "run_id": "fix-home-partner-link-and-partners-layout-20260921-1",
+  "homepage_id": 10,
+  "partners_id": 11,
+  "homepage_element_id": "1271118",
+  "old_home_href": "https://road-to-p1.com/#contact",
+  "new_home_href": "https://road-to-p1.com/partenaires/",
+  "partners_grid_id": "8735702",
+  "partner_card_ids": [
+    "49caa96",
+    "5eb18ed",
+    "2394503",
+    "3458751",
+    "da8e127"
+  ]
+}
