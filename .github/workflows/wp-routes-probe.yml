@@ -29,3 +29,7 @@ jobs:
           jq -r '.routes | keys[]' routes.json | grep -Ei 'elementor|cache|optimi|clear|regener|flush|purge' || true
           echo "---- /elementor/v1/post ----"
           jq '.routes["/elementor/v1/post"]' routes.json
+          echo "---- /elementor/v1/documents ----"
+          jq '.routes["/elementor/v1/documents"]' routes.json
+          echo "---- routes containing save/update/document ----"
+          jq -r '.routes | keys[]' routes.json | grep -Ei 'document|save|update' | grep -Ei 'elementor' || true
