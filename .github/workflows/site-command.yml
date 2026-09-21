@@ -1,0 +1,210 @@
+name: ROAD TO P1 Site Command
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - site-command.json
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: road-to-p1-site-command
+  cancel-in-progress: false
+
+jobs:
+  run-command:
+    runs-on: ubuntu-latest
+    env:
+      WORKER_URL: https://road-to-p1-media-api.felix-bruno1973.workers.dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate command
+        id: command
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, re
+          p = "site-command.json"
+          with open(p, encoding="utf-8") as f:
+              d = json.load(f)
+          enabled = bool(d.get("enabled", False))
+          path = d.get("page_path", "")
+          instruction = d.get("instruction", "")
+          device = d.get("device", "")
+          command_id = d.get("command_id", "")
+          confirm = d.get("confirm", False)
+          if not isinstance(command_id, str) or not re.fullmatch(r"[A-Za-z0-9._-]{1,80}", command_id):
+              raise SystemExit("Invalid command_id")
+          if not isinstance(path, str) or not path.startswith("/") or "://" in path or ".." in path:
+              raise SystemExit("Invalid page_path")
+          if not isinstance(instruction, str) or not (5 <= len(instruction) <= 4000):
+              raise SystemExit("Invalid instruction")
+          if device not in {"all","mobile","tablet","desktop"}:
+              raise SystemExit("Invalid device")
+          if not isinstance(confirm, bool):
+              raise SystemExit("confirm must be boolean")
+          out = os.environ["GITHUB_OUTPUT"]
+          with open(out, "a", encoding="utf-8") as g:
+              g.write(f"enabled={'true' if enabled else 'false'}\n")
+          print("Command:", command_id)
+          print("Enabled:", enabled)
+          print("Target path:", path)
+          print("Device:", device)
+          print("Confirm:", confirm)
+          PY
+
+      - name: Setup placeholder
+        if: steps.command.outputs.enabled != 'true'
+        run: echo "Bridge installed. Command is disabled, so nothing will be sent to WordPress."
+
+      - name: Check bridge secret
+        if: steps.command.outputs.enabled == 'true'
+        shell: bash
+        env:
+          RTP1_WRITE_KEY: ${{ secrets.RTP1_WRITE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$RTP1_WRITE_KEY" ]; then
+            echo "::error::Missing repository secret RTP1_WRITE_KEY. Add the same value used as WRITE_KEY in the Cloudflare Worker."
+            exit 1
+          fi
+
+      - name: Resolve WordPress page
+        if: steps.command.outputs.enabled == 'true'
+        id: page
+        shell: bash
+        env:
+          RTP1_WRITE_KEY: ${{ secrets.RTP1_WRITE_KEY }}
+        run: |
+          set -euo pipefail
+          curl -sS --fail-with-body \
+            -H "X-RTP1-Key: $RTP1_WRITE_KEY" \
+            "$WORKER_URL/pages" > pages.json
+
+          PAGE_ID="$(python - <<'PY'
+          import json
+          from urllib.parse import urlparse
+          cmd=json.load(open("site-command.json",encoding="utf-8"))
+          data=json.load(open("pages.json",encoding="utf-8"))
+          target=cmd["page_path"].rstrip("/") or "/"
+          matches=[]
+          for p in data.get("pages",[]):
+              path=urlparse(p.get("link","")).path.rstrip("/") or "/"
+              if path == target:
+                  matches.append(p)
+          if len(matches) != 1:
+              raise SystemExit(f"Expected exactly one page for {target!r}; found {len(matches)}")
+          print(matches[0]["id"])
+          PY
+          )"
+          echo "page_id=$PAGE_ID" >> "$GITHUB_OUTPUT"
+          echo "Resolved page ID: $PAGE_ID"
+
+      - name: Create protected draft
+        if: steps.command.outputs.enabled == 'true'
+        id: draft
+        shell: bash
+        env:
+          RTP1_WRITE_KEY: ${{ secrets.RTP1_WRITE_KEY }}
+          PAGE_ID: ${{ steps.page.outputs.page_id }}
+        run: |
+          set -euo pipefail
+          jq --argjson pageId "$PAGE_ID" \
+             '{pageId:$pageId, device:.device, instruction:.instruction}' \
+             site-command.json > draft-request.json
+
+          curl -sS --fail-with-body \
+            -X POST \
+            -H "X-RTP1-Key: $RTP1_WRITE_KEY" \
+            -H "Content-Type: application/json" \
+            --data-binary @draft-request.json \
+            "$WORKER_URL/draft" > draft-response.json
+
+          jq . draft-response.json
+          if [ "$(jq -r '.ok // false' draft-response.json)" != "true" ]; then
+            echo "::error::Worker refused draft"
+            exit 1
+          fi
+          CLARIFICATION="$(jq -r '.clarification // empty' draft-response.json)"
+          if [ -n "$CLARIFICATION" ]; then
+            echo "::error::Draft needs clarification: $CLARIFICATION"
+            exit 1
+          fi
+          DRAFT_ID="$(jq -r '.draft.id // empty' draft-response.json)"
+          if [ -z "$DRAFT_ID" ]; then
+            echo "::error::No draft id returned"
+            exit 1
+          fi
+          echo "draft_id=$DRAFT_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Generate preview and review hash
+        if: steps.command.outputs.enabled == 'true'
+        id: preview
+        shell: bash
+        env:
+          RTP1_WRITE_KEY: ${{ secrets.RTP1_WRITE_KEY }}
+          DRAFT_ID: ${{ steps.draft.outputs.draft_id }}
+        run: |
+          set -euo pipefail
+          jq -n --arg draftId "$DRAFT_ID" '{draftId:$draftId}' > preview-request.json
+
+          curl -sS --fail-with-body \
+            -X POST \
+            -H "X-RTP1-Key: $RTP1_WRITE_KEY" \
+            -H "Content-Type: application/json" \
+            --data-binary @preview-request.json \
+            "$WORKER_URL/preview" > preview-response.json
+
+          REVIEW_HASH="$(jq -r '.reviewHash // empty' preview-response.json)"
+          if [ -z "$REVIEW_HASH" ]; then
+            jq . preview-response.json
+            echo "::error::No review hash returned"
+            exit 1
+          fi
+          echo "review_hash=$REVIEW_HASH" >> "$GITHUB_OUTPUT"
+          echo "Protected preview generated successfully."
+
+      - name: Publish confirmed command
+        if: steps.command.outputs.enabled == 'true'
+        shell: bash
+        env:
+          RTP1_WRITE_KEY: ${{ secrets.RTP1_WRITE_KEY }}
+          DRAFT_ID: ${{ steps.draft.outputs.draft_id }}
+          REVIEW_HASH: ${{ steps.preview.outputs.review_hash }}
+        run: |
+          set -euo pipefail
+          CONFIRM="$(jq -r '.confirm' site-command.json)"
+          if [ "$CONFIRM" != "true" ]; then
+            echo "Command requested draft/preview only. Nothing published."
+            exit 0
+          fi
+
+          jq -n \
+            --arg draftId "$DRAFT_ID" \
+            --arg reviewHash "$REVIEW_HASH" \
+            '{draftId:$draftId, reviewHash:$reviewHash, confirm:true}' \
+            > apply-request.json
+
+          curl -sS --fail-with-body \
+            -X POST \
+            -H "X-RTP1-Key: $RTP1_WRITE_KEY" \
+            -H "Content-Type: application/json" \
+            --data-binary @apply-request.json \
+            "$WORKER_URL/apply" > apply-response.json
+
+          jq . apply-response.json
+          if [ "$(jq -r '.ok // false' apply-response.json)" != "true" ]; then
+            echo "::error::Publication not confirmed by Worker"
+            exit 1
+          fi
+          STATUS="$(jq -r '.draft.status // empty' apply-response.json)"
+          if [ "$STATUS" != "applied" ]; then
+            echo "::error::Unexpected draft status: $STATUS"
+            exit 1
+          fi
+          echo "ROAD TO P1 publication confirmed by WordPress."
