@@ -1,8 +1,9 @@
 {
   "enabled": true,
-  "command_id": "fix-mise-en-relation-20260921-r2",
+  "command_id": "fix-mise-en-relation-20260921-direct1",
+  "mode": "exact_text_replace",
   "page_path": "/road-to-p1/",
-  "instruction": "Corriger uniquement la coquille « Mise en reation » en « Mise en relation ». Ne modifier aucun autre texte, style, mise en page ou élément de la page.",
-  "device": "all",
+  "source_text": "Mise en reation",
+  "replacement_text": "Mise en relation",
   "confirm": true
 }
