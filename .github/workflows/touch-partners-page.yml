@@ -1,0 +1,70 @@
+name: ROAD TO P1 Touch Partenaires Page
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - partners-page-touch.json
+
+permissions:
+  contents: read
+
+jobs:
+  touch:
+    runs-on: ubuntu-latest
+    env:
+      WP_URL: https://road-to-p1.com
+      WP_USERNAME: roadtop1-media
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Touch page through WordPress core REST
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          jq -e '.confirm == true and .page_id == 11 and .page_path == "/partenaires/"' partners-page-touch.json >/dev/null
+
+          CODE="$(curl -sS -o before.json -w '%{http_code}'             -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"             -H "Accept: application/json"             "$WP_URL/wp-json/wp/v2/pages/11?context=edit")"
+          [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || { cat before.json; exit 1; }
+
+          TITLE="$(jq -r '.title.raw' before.json)"
+          CONTENT="$(jq -r '.content.raw' before.json)"
+          jq -n --arg title "$TITLE" --arg content "$CONTENT" '{title:$title,content:$content,status:"publish"}' > touch.json
+
+          OK=0
+          for ATTEMPT in 1 2 3 4; do
+            CODE="$(curl -sS -o response.json -w '%{http_code}'               -X POST               -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"               -H "Content-Type: application/json"               --data-binary @touch.json               "$WP_URL/wp-json/wp/v2/pages/11")"
+            echo "Touch attempt $ATTEMPT -> HTTP $CODE"
+            if [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ]; then
+              OK=1
+              break
+            fi
+            sleep 4
+          done
+          if [ "$OK" != "1" ]; then
+            jq . response.json 2>/dev/null || cat response.json
+            exit 1
+          fi
+          echo "WordPress save hooks triggered."
+
+      - name: Verify public page
+        shell: bash
+        run: |
+          set -euo pipefail
+          OK=0
+          URL="$WP_URL/partenaires/?rtp1_touch=$GITHUB_RUN_ID"
+          for ATTEMPT in 1 2 3 4 5; do
+            CODE="$(curl -sS -L -o public.html -w '%{http_code}' -H "Cache-Control: no-cache, no-store, must-revalidate" "$URL")"
+            if [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] &&                grep -Fq "Votre soutien a un impact concret" public.html &&                grep -Fq "À quoi servent les contributions" public.html; then
+              OK=1
+              break
+            fi
+            sleep 4
+          done
+          if [ "$OK" != "1" ]; then
+            echo "::error::Public page still shows stale content."
+            exit 1
+          fi
+          echo "Public Partenaires page verified."
