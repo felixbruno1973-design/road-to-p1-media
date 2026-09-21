@@ -74,5 +74,12 @@ jobs:
                   walk(n.get("elements") or [],depth+1,n.get("id",""))
           print("TITLE:",(p.get("title") or {}).get("raw"))
           print("SLUG:",p.get("slug"))
+          print("META_KEYS:", sorted((p.get("meta") or {}).keys()))
+          for k,v in (p.get("meta") or {}).items():
+              if k in ("_elementor_element_cache","_elementor_css","_elementor_data"):
+                  if isinstance(v,str):
+                      print("META",k,"type=str","len=",len(v),"sample=",clean(v[:300]))
+                  else:
+                      print("META",k,"type=",type(v).__name__)
           walk(data)
           PY
