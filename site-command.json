@@ -1,9 +1,9 @@
 {
   "enabled": true,
-  "command_id": "fix-mise-en-relation-20260921-direct1",
+  "command_id": "fix-charing-sharing-20260921",
   "mode": "exact_text_replace",
-  "page_path": "/road-to-p1/",
-  "source_text": "Mise en reation",
-  "replacement_text": "Mise en relation",
+  "page_path": "/en/home/",
+  "source_text": "charing",
+  "replacement_text": "sharing",
   "confirm": true
 }
