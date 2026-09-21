@@ -139,6 +139,11 @@ jobs:
           fi
           jq '{ok,page,revision,elementCount:(.elements|length)}' snapshot.json
 
+          CORE_HTTP="$(curl -sS -o core-page.json -w '%{http_code}'             -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"             -H "Accept: application/json"             "$WP_URL/wp-json/wp/v2/pages/$PAGE_ID?context=edit")"
+          if [ "$CORE_HTTP" -lt 200 ] || [ "$CORE_HTTP" -ge 300 ]; then
+            echo "{}" > core-page.json
+          fi
+
       - name: Build exact replacement draft
         if: steps.command.outputs.enabled == 'true'
         shell: bash
@@ -185,6 +190,22 @@ jobs:
                       })
 
           if len(matches) != 1:
+              core = json.load(open("core-page.json", encoding="utf-8"))
+              paths = []
+              def walk(v, path="$"):
+                  if isinstance(v, dict):
+                      for k, x in v.items():
+                          walk(x, f"{path}.{k}")
+                  elif isinstance(v, list):
+                      for i, x in enumerate(v):
+                          walk(x, f"{path}[{i}]")
+                  elif isinstance(v, str) and source in v:
+                      paths.append(path)
+              walk(core)
+              print("Editable catalogue matches:", len(matches))
+              print("Core REST occurrences:", len(paths))
+              for p in paths[:20]:
+                  print("Core path containing source:", p)
               raise SystemExit(f"Safety stop: expected exactly one editable occurrence of {source!r}, found {len(matches)}")
 
           body = {
