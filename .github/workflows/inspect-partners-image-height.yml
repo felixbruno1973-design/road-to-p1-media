@@ -1,0 +1,42 @@
+name: ROAD TO P1 Inspect Partner Image Height FR EN
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - inspect-partners-image-height.json
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    env:
+      WP_URL: https://road-to-p1.com
+      WP_USERNAME: roadtop1-media
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect image height settings
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for ID in 11 10517; do
+            curl -sS -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" -H "Accept: application/json" "$WP_URL/wp-json/wp/v2/pages/$ID?context=edit" > "p-$ID.json"
+            jq -r '.meta._elementor_data' "p-$ID.json" > "e-$ID.json"
+            PAGE_ID="$ID" python - <<'PY'
+          import json,os
+          pid=os.environ["PAGE_ID"]
+          d=json.load(open(f"e-{pid}.json",encoding="utf-8"))
+          targets={"49caa96","5eb18ed","2394503","3458751","da8e127"}
+          def walk(nodes):
+              for n in nodes or []:
+                  if n.get("id") in targets:
+                      s=n.get("settings") or {}
+                      print(pid,n.get("id"),"image_height=",s.get("image_height"),"image_size_mobile=",s.get("image_size_mobile"))
+                  walk(n.get("elements") or [])
+          walk(d)
+          PY
+          done
