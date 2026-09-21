@@ -28,7 +28,7 @@ jobs:
           python - <<'PY'
           import json
           d=json.load(open("el.json",encoding="utf-8"))
-          ids={"8f33e70","2f26c83","412d480","c63e02a","8735702","bb25799"}
+          ids={"8f33e70","2f26c83","412d480","c63e02a","8735702","bb25799","49caa96","5eb18ed","2394503","3458751","da8e127"}
           def walk(nodes,parent=""):
               for n in nodes or []:
                   if n.get("id") in ids:
