@@ -104,3 +104,16 @@ for pid,label in [(10,"FR"),(9968,"EN")]:
                 print(label,json.dumps({"id":n.get("id"),"settings":n.get("settings")},ensure_ascii=False))
             walk_forms(n.get("elements") or [])
     walk_forms(d)
+
+print("=== SPECIAL WIDGET CONTENT FR EN ===")
+special={"8a0bb66","8c6bee4","3232d75","cce129d","529c7bb","26b0626","5895775","f1e0a95"}
+for pid,label in [(10,"FR"),(9968,"EN")]:
+    p,d=page(pid)
+    def walk_special(nodes):
+        for n in nodes or []:
+            if n.get("id") in special:
+                st=n.get("settings") or {}
+                keys=[k for k in st if any(t in k for t in ["title","text","subtext","accordion","read_more","button_text","load_more"])]
+                print(label,json.dumps({"id":n.get("id"),"widgetType":n.get("widgetType"),"content":{k:st.get(k) for k in keys}},ensure_ascii=False))
+            walk_special(n.get("elements") or [])
+    walk_special(d)
