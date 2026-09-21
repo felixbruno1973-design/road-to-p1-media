@@ -118,16 +118,19 @@ jobs:
              '{pageId:$pageId, device:.device, instruction:.instruction}' \
              site-command.json > draft-request.json
 
-          curl -sS --fail-with-body \
+          HTTP_CODE="$(curl -sS \
+            -o draft-response.json \
+            -w '%{http_code}' \
             -X POST \
             -H "X-RTP1-Key: $RTP1_WRITE_KEY" \
             -H "Content-Type: application/json" \
             --data-binary @draft-request.json \
-            "$WORKER_URL/draft" > draft-response.json
+            "$WORKER_URL/draft")"
 
-          jq . draft-response.json
-          if [ "$(jq -r '.ok // false' draft-response.json)" != "true" ]; then
-            echo "::error::Worker refused draft"
+          jq . draft-response.json || cat draft-response.json
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ] || [ "$(jq -r '.ok // false' draft-response.json 2>/dev/null)" != "true" ]; then
+            MSG="$(jq -r '.message // "Worker refused draft"' draft-response.json 2>/dev/null || echo "Worker refused draft")"
+            echo "::error::Draft failed (HTTP $HTTP_CODE): $MSG"
             exit 1
           fi
           CLARIFICATION="$(jq -r '.clarification // empty' draft-response.json)"
