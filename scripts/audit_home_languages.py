@@ -82,3 +82,12 @@ for p in pages.get("pages",[]):
     link=p.get("link","")
     if "/en/" in urlparse(link).path:
         print(json.dumps({"id":p.get("id"),"title":p.get("title",""),"link":link,"path":urlparse(link).path},ensure_ascii=False))
+
+print("=== FR WIDGET TREE TYPES ===")
+p,d=page(10)
+def wt(nodes,parent=""):
+    for n in nodes or []:
+        if n.get("widgetType"):
+            print(json.dumps({"id":n.get("id"),"parent":parent,"widgetType":n.get("widgetType"),"setting_keys":sorted((n.get("settings") or {}).keys())[:80]},ensure_ascii=False))
+        wt(n.get("elements") or [],n.get("id",""))
+wt(d)
