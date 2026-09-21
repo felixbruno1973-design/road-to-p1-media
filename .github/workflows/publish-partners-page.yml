@@ -119,7 +119,8 @@ jobs:
           walk(data)
           if len(changed)!=3 or len(set(changed))!=3:
               raise SystemExit(f"Safety stop: unexpected changed element count {changed}")
-          json.dump({"meta":{"_elementor_data":data}},open("page-update.json","w",encoding="utf-8"),ensure_ascii=False,separators=(",",":"))
+          stored=json.dumps(data,ensure_ascii=False,separators=(",",":")) if isinstance(meta,str) else data
+          json.dump({"meta":{"_elementor_data":stored}},open("page-update.json","w",encoding="utf-8"),ensure_ascii=False,separators=(",",":"))
           print("Prepared update for exactly three Elementor widgets:", changed)
           PY
 
