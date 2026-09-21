@@ -27,3 +27,5 @@ jobs:
           echo "HTTP $CODE"
           [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || { cat routes.json; exit 1; }
           jq -r '.routes | keys[]' routes.json | grep -Ei 'elementor|cache|optimi|clear|regener|flush|purge' || true
+          echo "---- /elementor/v1/post ----"
+          jq '.routes["/elementor/v1/post"]' routes.json
