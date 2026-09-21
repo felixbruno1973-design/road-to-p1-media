@@ -50,29 +50,15 @@ jobs:
               exit 1
             fi
 
-            python - "$TARGET" "$LABEL" <<'PY'
-import json,sys
-target=sys.argv[1]
-label=sys.argv[2]
-snap=json.load(open("snapshot.json",encoding="utf-8"))
-body={
-  "pageId":11,
-  "revision":snap["revision"],
-  "instruction":f"Maintenance cache Elementor: {label}",
-  "summary":f"Maintenance cache: {label}",
-  "device":"all",
-  "changes":[{
-    "kind":"setting",
-    "elementId":"412d480",
-    "key":"title",
-    "selector":"",
-    "device":"all",
-    "value":json.dumps(target,ensure_ascii=False),
-    "reason":"Régénération contrôlée du rendu Elementor et des caches."
-  }]
-}
-json.dump(body,open("draft-request.json","w",encoding="utf-8"),ensure_ascii=False,separators=(",",":"))
-PY
+            REV="$(jq -r '.revision' snapshot.json)"
+            VALUE_JSON="$(jq -Rn --arg t "$TARGET" '$t|tojson')"
+            jq -n \
+              --arg rev "$REV" \
+              --arg target "$TARGET" \
+              --arg label "$LABEL" \
+              --arg value_json "$VALUE_JSON" \
+              '{pageId:11,revision:$rev,instruction:("Maintenance cache Elementor: "+$label),summary:("Maintenance cache: "+$label),device:"all",changes:[{kind:"setting",elementId:"412d480",key:"title",selector:"",device:"all",value:$value_json,reason:"Régénération contrôlée du rendu Elementor et des caches."}]}' \
+              > draft-request.json
 
             CODE="$(curl -sS -o draft.json -w '%{http_code}' \
               -X POST \
@@ -134,21 +120,12 @@ PY
             "$WP_URL$RTP1_API/snapshot/11")"
           [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || exit 1
 
-          python - <<'PY'
-import json,sys
-snap=json.load(open("snapshot-final.json",encoding="utf-8"))
-final=json.load(open("partners-cache-refresh.json",encoding="utf-8"))["final_title"]
-found=[]
-def walk(nodes):
-    for n in nodes or []:
-        if n.get("id")=="412d480":
-            found.append((n.get("settings") or {}).get("title"))
-        walk(n.get("elements") or [])
-walk(snap.get("data") or [])
-print("Final stored heading:",found)
-if found!=[final]:
-    sys.exit(2)
-PY
+          FINAL="$(jq -r '.final_title' partners-cache-refresh.json)"
+          COUNT="$(jq --arg final "$FINAL" '[.. | objects | select(.id?=="412d480" and .settings.title?==$final)] | length' snapshot-final.json)"
+          if [ "$COUNT" != "1" ]; then
+            echo "::error::Final heading verification failed."
+            exit 1
+          fi
 
           URL="$WP_URL/partenaires/?rtp1_live_verify=$GITHUB_RUN_ID"
           OK=0
