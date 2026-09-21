@@ -1,0 +1,8 @@
+{
+  "enabled": false,
+  "command_id": "setup",
+  "page_path": "/",
+  "instruction": "Bridge setup only; do not publish.",
+  "device": "all",
+  "confirm": false
+}
