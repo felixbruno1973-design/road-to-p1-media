@@ -39,3 +39,9 @@ for pid,label in [(11,"FR"),(10517,"EN")]:
                 "id":n.get("id"),"parent":parent,"elType":n.get("elType"),"widgetType":n.get("widgetType"),
                 "values":vals
             },ensure_ascii=False))
+
+print("=== FR RAW TEXT EDITOR C63E02A ===")
+p,d=load(11)
+for _,n in walk(d):
+    if n.get("id")=="c63e02a":
+        print((n.get("settings") or {}).get("editor",""))
