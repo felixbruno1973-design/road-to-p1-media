@@ -1,0 +1,102 @@
+name: ROAD TO P1 Sync English Home
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - sync-home-en.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: road-to-p1-sync-english-home
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      WP_URL: https://road-to-p1.com
+      WP_USERNAME: roadtop1-media
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate command
+        run: |
+          set -euo pipefail
+          jq -e '.confirm == true and .source_fr_page_id == 10 and .target_en_page_id == 9968' sync-home-en.json >/dev/null
+
+      - name: Read current French and English pages
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for SPEC in "10:fr.json" "9968:en-before.json"; do
+            ID="${SPEC%%:*}"
+            OUT="${SPEC#*:}"
+            CODE="$(curl -sS -o "$OUT" -w '%{http_code}' -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" -H "Accept: application/json" "$WP_URL/wp-json/wp/v2/pages/$ID?context=edit")"
+            echo "Read page $ID -> HTTP $CODE"
+            [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || { cat "$OUT"; exit 1; }
+          done
+
+      - name: Backup English homepage
+        uses: actions/upload-artifact@v4
+        with:
+          name: english-home-before-sync-${{ github.run_id }}
+          path: en-before.json
+          retention-days: 30
+
+      - name: Build aligned English homepage
+        run: python scripts/sync_english_home.py
+
+      - name: Publish with WAF retries
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          OK=0
+          for ATTEMPT in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            CODE="$(curl -sS -o response.json -w '%{http_code}' -X POST -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" -H "Content-Type: application/json" --data-binary @en-update.json "$WP_URL/wp-json/wp/v2/pages/9968")"
+            echo "Publish attempt $ATTEMPT -> HTTP $CODE"
+            if [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ]; then OK=1; break; fi
+            sleep 5
+          done
+          if [ "$OK" != "1" ]; then
+            echo "::error::English homepage write blocked after retries."
+            jq . response.json 2>/dev/null || true
+            exit 1
+          fi
+
+      - name: Verify stored English homepage
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CODE="$(curl -sS -o en-after.json -w '%{http_code}' -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" -H "Accept: application/json" "$WP_URL/wp-json/wp/v2/pages/9968?context=edit")"
+          [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || exit 1
+          jq -r '.meta._elementor_data' en-after.json > en-elementor.json
+
+          python - <<'PY'
+          import json
+          d=json.load(open("en-elementor.json",encoding="utf-8"))
+          s=json.dumps(d,ensure_ascii=False)
+          checks={
+            "new_hero": "ROAD TO P1 · The association" in s and ".elementor-9968" in s,
+            "calendar_lara_2026": "calendar-lara.png" in s,
+            "calendar_aaron_2026": "calendar-aaron.png" in s,
+            "no_2025_calendar": "Calandrier-UFOLEP-KART-2025.png" not in s,
+            "no_legacy_rankings": '"8aa1197"' not in s and '"b0bbcad"' not in s,
+            "english_news": "https://road-to-p1.com/en/news/" in s,
+            "english_partners": "https://road-to-p1.com/en/our-partners/" in s,
+            "english_lara": "https://road-to-p1.com/en/lara-felix-karting-driver/" in s,
+            "english_aaron": "https://road-to-p1.com/en/aaron-felix-karting-driver/" in s,
+            "flyer_2027": "Flyer-ROAD-TO-P1-2027.pdf" in s,
+            "aaron_age_8": "Aaron, 8 years old" in s,
+          }
+          for k,v in checks.items(): print(f"{k}: {v}")
+          if not all(checks.values()): raise SystemExit("Stored English homepage verification failed")
+          PY
