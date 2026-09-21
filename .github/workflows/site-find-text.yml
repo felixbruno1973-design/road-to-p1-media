@@ -1,0 +1,68 @@
+name: ROAD TO P1 Find Text
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - site-find.json
+
+permissions:
+  contents: read
+
+jobs:
+  find-text:
+    runs-on: ubuntu-latest
+    env:
+      WP_URL: https://road-to-p1.com
+      WP_USERNAME: roadtop1-media
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Search WordPress pages
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          QUERY="$(jq -r '.query' site-find.json)"
+          if [ -z "$QUERY" ] || [ "$QUERY" = "null" ]; then
+            echo "::error::Missing query"
+            exit 1
+          fi
+          ENC="$(python - <<'PY'
+          import json, urllib.parse
+          q=json.load(open("site-find.json",encoding="utf-8"))["query"]
+          print(urllib.parse.quote(q))
+          PY
+          )"
+          CODE="$(curl -sS -o search.json -w '%{http_code}' \
+            -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" \
+            -H "Accept: application/json" \
+            "$WP_URL/wp-json/wp/v2/pages?context=edit&per_page=100&search=$ENC")"
+          if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ]; then
+            jq . search.json 2>/dev/null || cat search.json
+            echo "::error::Search failed (HTTP $CODE)"
+            exit 1
+          fi
+          python - <<'PY'
+          import json
+          pages=json.load(open("search.json",encoding="utf-8"))
+          q=json.load(open("site-find.json",encoding="utf-8"))["query"]
+          print("Pages returned:",len(pages))
+          for p in pages:
+              raw=((p.get("content") or {}).get("raw")) or ""
+              meta=(p.get("meta") or {}).get("_elementor_data")
+              def count(v):
+                  if isinstance(v,str): return v.count(q)
+                  if isinstance(v,list): return sum(count(x) for x in v)
+                  if isinstance(v,dict): return sum(count(x) for x in v.values())
+                  return 0
+              print(json.dumps({
+                  "id":p.get("id"),
+                  "slug":p.get("slug"),
+                  "link":p.get("link"),
+                  "title":((p.get("title") or {}).get("raw") or (p.get("title") or {}).get("rendered")),
+                  "raw_count":raw.count(q),
+                  "meta_count":count(meta)
+              },ensure_ascii=False))
+          PY
