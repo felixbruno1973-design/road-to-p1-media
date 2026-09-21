@@ -1,0 +1,82 @@
+name: ROAD TO P1 Worker Refresh Partenaires
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - partners-worker-refresh.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: road-to-p1-worker-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    env:
+      WORKER_URL: https://road-to-p1-media-api.felix-bruno1973.workers.dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Refresh through Worker protected flow
+        shell: bash
+        env:
+          RTP1_WRITE_KEY: ${{ secrets.RTP1_WRITE_KEY }}
+        run: |
+          set -euo pipefail
+          jq -e '.confirm == true and .page_id == 11 and .page_path == "/partenaires/" and .element_id == "412d480"' partners-worker-refresh.json >/dev/null
+
+          run_change () {
+            local TARGET="$1"
+            local LABEL="$2"
+
+            jq -n               --argjson pageId 11               --arg device "all"               --arg instruction "Sur la page Partenaires, modifie uniquement le titre « Votre soutien a un impact concret » pour qu'il devienne exactement « $TARGET ». Ne modifie rien d'autre."               '{pageId:$pageId,device:$device,instruction:$instruction}' > draft-request.json
+
+            CODE="$(curl -sS -o draft.json -w '%{http_code}'               -X POST               -H "X-RTP1-Key: $RTP1_WRITE_KEY"               -H "Content-Type: application/json"               --data-binary @draft-request.json               "$WORKER_URL/draft")"
+
+            jq '{ok,clarification,draft}' draft.json 2>/dev/null || cat draft.json
+            if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ] || [ "$(jq -r '.ok // false' draft.json 2>/dev/null)" != "true" ]; then
+              echo "::error::Worker draft failed (HTTP $CODE)"
+              exit 1
+            fi
+            DRAFT_ID="$(jq -r '.draft.id // empty' draft.json)"
+            if [ -z "$DRAFT_ID" ]; then
+              echo "::error::No draft id returned"
+              exit 1
+            fi
+
+            COUNT="$(jq '.draft.diff | length' draft.json)"
+            EID="$(jq -r '.draft.diff[0].elementId // empty' draft.json)"
+            AFTER="$(jq -r '.draft.diff[0].after // empty' draft.json)"
+            if [ "$COUNT" != "1" ] || [ "$EID" != "412d480" ] || [ "$AFTER" != "$TARGET" ]; then
+              echo "::error::Safety stop: unexpected draft diff"
+              jq '.draft.diff' draft.json
+              exit 1
+            fi
+
+            jq -n --arg draftId "$DRAFT_ID" '{draftId:$draftId}' > preview-request.json
+            CODE="$(curl -sS -o preview.json -w '%{http_code}'               -X POST               -H "X-RTP1-Key: $RTP1_WRITE_KEY"               -H "Content-Type: application/json"               --data-binary @preview-request.json               "$WORKER_URL/preview")"
+            if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ] || [ "$(jq -r '.ok // false' preview.json 2>/dev/null)" != "true" ]; then
+              jq . preview.json 2>/dev/null || cat preview.json
+              echo "::error::Worker preview failed (HTTP $CODE)"
+              exit 1
+            fi
+            REVIEW_HASH="$(jq -r '.reviewHash // empty' preview.json)"
+            [ -n "$REVIEW_HASH" ] || { echo "::error::No review hash"; exit 1; }
+
+            jq -n --arg draftId "$DRAFT_ID" --arg reviewHash "$REVIEW_HASH" '{draftId:$draftId,reviewHash:$reviewHash,confirm:true}' > apply-request.json
+            CODE="$(curl -sS -o apply.json -w '%{http_code}'               -X POST               -H "X-RTP1-Key: $RTP1_WRITE_KEY"               -H "Content-Type: application/json"               --data-binary @apply-request.json               "$WORKER_URL/apply")"
+            jq '{ok,message,warning,draft:.draft.status}' apply.json 2>/dev/null || cat apply.json
+            if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ] || [ "$(jq -r '.ok // false' apply.json 2>/dev/null)" != "true" ]; then
+              echo "::error::Worker apply failed (HTTP $CODE)"
+              exit 1
+            fi
+          }
+
+          FINAL="$(jq -r '.final_title' partners-worker-refresh.json)"
+          TEMP="$FINAL."
+          run_change "$TEMP" "temporary"
+          run_change "$FINAL" "final"
