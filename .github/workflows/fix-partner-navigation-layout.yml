@@ -1,0 +1,198 @@
+name: ROAD TO P1 Fix Partner Navigation and Layout
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - fix-partner-navigation-layout.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: road-to-p1-partner-navigation-layout
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    env:
+      WP_URL: https://road-to-p1.com
+      WP_USERNAME: roadtop1-media
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate command
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e '.confirm == true and .homepage_id == 10 and .partners_id == 11 and .homepage_element_id == "1271118" and .partners_grid_id == "8735702"' fix-partner-navigation-layout.json >/dev/null
+
+      - name: Read current Elementor pages
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for ID in 10 11; do
+            CODE="$(curl -sS -o "page-$ID-before.json" -w '%{http_code}'               -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"               -H "Accept: application/json"               "$WP_URL/wp-json/wp/v2/pages/$ID?context=edit")"
+            if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ]; then
+              echo "::error::Unable to read page $ID (HTTP $CODE)"
+              exit 1
+            fi
+          done
+
+      - name: Save backups
+        uses: actions/upload-artifact@v4
+        with:
+          name: before-partner-navigation-layout-${{ github.run_id }}
+          path: |
+            page-10-before.json
+            page-11-before.json
+          retention-days: 30
+
+      - name: Build guarded updates
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > build_updates.py <<'PY'
+          import json, sys
+
+          cmd=json.load(open("fix-partner-navigation-layout.json",encoding="utf-8"))
+
+          def load_page(pid):
+              p=json.load(open(f"page-{pid}-before.json",encoding="utf-8"))
+              meta=(p.get("meta") or {}).get("_elementor_data")
+              if not isinstance(meta,str):
+                  raise SystemExit(f"Safety stop: Elementor data for page {pid} is not a string")
+              return p, meta, json.loads(meta)
+
+          def find(nodes, wanted):
+              found=[]
+              def walk(items):
+                  for n in items or []:
+                      if n.get("id")==wanted:
+                          found.append(n)
+                      walk(n.get("elements") or [])
+              walk(nodes)
+              if len(found)!=1:
+                  raise SystemExit(f"Safety stop: element {wanted} found {len(found)} times")
+              return found[0]
+
+          p10, raw10, d10=load_page(10)
+          home=find(d10,cmd["homepage_element_id"])
+          if home.get("widgetType")!="html":
+              raise SystemExit("Safety stop: homepage target is not the expected HTML widget")
+          html=(home.get("settings") or {}).get("html")
+          if not isinstance(html,str):
+              raise SystemExit("Safety stop: homepage HTML is unavailable")
+          old=cmd["old_home_href"]
+          new=cmd["new_home_href"]
+          marker='class="rtp-intro__button rtp-intro__button--primary" href="'+old+'">Devenir partenaire</a>'
+          replacement='class="rtp-intro__button rtp-intro__button--primary" href="'+new+'">Devenir partenaire</a>'
+          if html.count(marker)!=1:
+              raise SystemExit(f"Safety stop: expected one exact Devenir partenaire link, found {html.count(marker)}")
+          home["settings"]["html"]=html.replace(marker,replacement)
+
+          p11, raw11, d11=load_page(11)
+          grid=find(d11,cmd["partners_grid_id"])
+          if grid.get("elType")!="container":
+              raise SystemExit("Safety stop: partner grid target is not a container")
+          gs=grid.setdefault("settings",{})
+          gs["container_type"]="flex"
+          gs["flex_direction"]="row"
+          gs["flex_wrap"]="wrap"
+          gs["flex_justify_content"]="center"
+          gs["flex_align_items"]="stretch"
+          gs["flex_gap"]={"column":"28","row":"28","isLinked":True,"unit":"px","size":28}
+          gs["margin"]={"unit":"px","top":"40","right":"0","bottom":"50","left":"0","isLinked":False}
+          gs["padding"]={"unit":"px","top":"10","right":"24","bottom":"10","left":"24","isLinked":False}
+          gs["margin_mobile"]={"unit":"px","top":"20","right":"0","bottom":"30","left":"0","isLinked":False}
+          gs["padding_mobile"]={"unit":"px","top":"10","right":"16","bottom":"10","left":"16","isLinked":False}
+
+          card_ids=cmd["partner_card_ids"]
+          for eid in card_ids:
+              card=find(d11,eid)
+              if card.get("widgetType")!="image-box":
+                  raise SystemExit(f"Safety stop: {eid} is not an image-box")
+              s=card.setdefault("settings",{})
+              s["text_align"]="center"
+              s["image_size"]={"unit":"%","size":60,"sizes":[]}
+              s["image_size_tablet"]={"unit":"%","size":62,"sizes":[]}
+              s["image_size_mobile"]={"unit":"%","size":68,"sizes":[]}
+              s["image_space"]={"unit":"px","size":18,"sizes":[]}
+              s["_element_width"]="initial"
+              s["_element_custom_width"]={"unit":"px","size":290,"sizes":[]}
+              s["_element_custom_width_tablet"]={"unit":"px","size":280,"sizes":[]}
+              s["_element_custom_width_mobile"]={"unit":"%","size":92,"sizes":[]}
+              s["_padding"]={"unit":"px","top":"26","right":"22","bottom":"26","left":"22","isLinked":False}
+              s["_border_border"]="solid"
+              s["_border_width"]={"unit":"px","top":"1","right":"1","bottom":"1","left":"1","isLinked":True}
+              s["_border_radius"]={"unit":"px","top":"14","right":"14","bottom":"14","left":"14","isLinked":True}
+              s["_box_shadow_box_shadow_type"]="yes"
+              s["_box_shadow_box_shadow"]={"horizontal":0,"vertical":8,"blur":24,"spread":0,"color":"rgba(0, 0, 0, 0.12)"}
+              s["description_typography_typography"]="custom"
+              s["description_typography_line_height"]={"unit":"em","size":1.45,"sizes":[]}
+              s["description_typography_font_size"]={"unit":"em","size":0.95,"sizes":[]}
+
+          json.dump({"meta":{"_elementor_data":json.dumps(d10,ensure_ascii=False,separators=(",",":"))}},
+                    open("page-10-update.json","w",encoding="utf-8"),ensure_ascii=False,separators=(",",":"))
+          json.dump({"meta":{"_elementor_data":json.dumps(d11,ensure_ascii=False,separators=(",",":"))}},
+                    open("page-11-update.json","w",encoding="utf-8"),ensure_ascii=False,separators=(",",":"))
+
+          print("Prepared homepage partner link correction.")
+          print("Prepared centered responsive partner-card layout for",len(card_ids),"cards.")
+          PY
+          python build_updates.py
+
+      - name: Publish homepage link correction
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CODE="$(curl -sS -o page-10-response.json -w '%{http_code}'             -X POST             -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"             -H "Content-Type: application/json"             --data-binary @page-10-update.json             "$WP_URL/wp-json/wp/v2/pages/10")"
+          if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ]; then
+            jq . page-10-response.json 2>/dev/null || cat page-10-response.json
+            echo "::error::Homepage update failed (HTTP $CODE)"
+            exit 1
+          fi
+
+      - name: Publish Partenaires layout correction
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CODE="$(curl -sS -o page-11-response.json -w '%{http_code}'             -X POST             -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"             -H "Content-Type: application/json"             --data-binary @page-11-update.json             "$WP_URL/wp-json/wp/v2/pages/11")"
+          if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ]; then
+            jq . page-11-response.json 2>/dev/null || cat page-11-response.json
+            echo "::error::Partenaires layout update failed (HTTP $CODE)"
+            exit 1
+          fi
+
+      - name: Verify stored Elementor data
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for ID in 10 11; do
+            CODE="$(curl -sS -o "page-$ID-after.json" -w '%{http_code}'               -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"               -H "Accept: application/json"               "$WP_URL/wp-json/wp/v2/pages/$ID?context=edit")"
+            [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || exit 1
+          done
+
+          jq -r '.meta._elementor_data' page-10-after.json > home-after.json
+          jq -r '.meta._elementor_data' page-11-after.json > partners-after.json
+
+          HOME_OK="$(jq '[.. | objects | select(.id?=="1271118") | .settings.html | contains("href=\"https://road-to-p1.com/partenaires/\">Devenir partenaire</a>")] | any' home-after.json)"
+          GRID_OK="$(jq '[.. | objects | select(.id?=="8735702") | (.settings.container_type=="flex" and .settings.flex_wrap=="wrap" and .settings.flex_justify_content=="center")] | any' partners-after.json)"
+          CARDS_OK="$(jq '[.. | objects | select(.id? as $id | ["49caa96","5eb18ed","2394503","3458751","da8e127"] | index($id)) | select(.settings.image_size.size==60 and .settings._element_custom_width.size==290)] | length == 5' partners-after.json)"
+
+          echo "Homepage link verified: $HOME_OK"
+          echo "Partner grid verified: $GRID_OK"
+          echo "Partner cards verified: $CARDS_OK"
+          if [ "$HOME_OK" != "true" ] || [ "$GRID_OK" != "true" ] || [ "$CARDS_OK" != "true" ]; then
+            echo "::error::Stored Elementor verification failed."
+            exit 1
+          fi
