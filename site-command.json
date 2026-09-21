@@ -1,6 +1,6 @@
 {
   "enabled": true,
-  "command_id": "fix-mise-en-relation-20260921-core1",
+  "command_id": "fix-mise-en-relation-20260921-core2",
   "mode": "exact_text_replace",
   "page_path": "/road-to-p1/",
   "source_text": "Mise en reation",
