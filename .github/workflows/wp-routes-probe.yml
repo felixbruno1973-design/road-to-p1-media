@@ -1,0 +1,29 @@
+name: ROAD TO P1 Probe WordPress REST Routes
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - wp-routes-probe.json
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      WP_URL: https://road-to-p1.com
+      WP_USERNAME: roadtop1-media
+    steps:
+      - uses: actions/checkout@v4
+      - name: Probe REST routes
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CODE="$(curl -sS -o routes.json -w '%{http_code}'             -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"             -H "Accept: application/json"             "$WP_URL/wp-json/")"
+          echo "HTTP $CODE"
+          [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || { cat routes.json; exit 1; }
+          jq -r '.routes | keys[]' routes.json | grep -Ei 'elementor|cache|optimi|clear|regener|flush|purge' || true
