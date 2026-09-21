@@ -1,6 +1,6 @@
 {
   "enabled": true,
-  "command_id": "fix-aprendre-apprendre-20260921",
+  "command_id": "fix-aprendre-apprendre-20260921-r2",
   "mode": "exact_text_replace",
   "page_path": "/road-to-p1/",
   "source_text": "aprendre",
