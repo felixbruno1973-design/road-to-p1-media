@@ -38,6 +38,7 @@ jobs:
           source=d.get("source_text","")
           replacement=d.get("replacement_text","")
           confirm=d.get("confirm",False)
+          expected=d.get("expected_occurrences",1)
           if not isinstance(cid,str) or not re.fullmatch(r"[A-Za-z0-9._-]{1,80}",cid):
               raise SystemExit("Invalid command_id")
           if mode!="exact_text_replace":
@@ -52,6 +53,8 @@ jobs:
               raise SystemExit("Source and replacement are identical")
           if not isinstance(confirm,bool):
               raise SystemExit("confirm must be boolean")
+          if not isinstance(expected,int) or expected<1 or expected>12:
+              raise SystemExit("expected_occurrences must be an integer from 1 to 12")
           with open(os.environ["GITHUB_OUTPUT"],"a",encoding="utf-8") as g:
               g.write(f"enabled={'true' if enabled else 'false'}\n")
           print("Command:",cid)
@@ -147,6 +150,7 @@ jobs:
           core=json.load(open("core-page.json",encoding="utf-8"))
           source=cmd["source_text"]
           replacement=cmd["replacement_text"]
+          expected=int(cmd.get("expected_occurrences",1))
 
           safe=[]
           for element in snap.get("elements",[]):
@@ -172,7 +176,7 @@ jobs:
                       })
 
           out=os.environ["GITHUB_OUTPUT"]
-          if len(safe)==1:
+          if len(safe)==expected:
               body={
                   "pageId":int(snap["page"]["id"]),
                   "revision":snap["revision"],
@@ -183,10 +187,10 @@ jobs:
               }
               json.dump(body,open("draft-request.json","w",encoding="utf-8"),ensure_ascii=False,separators=(",",":"))
               with open(out,"a",encoding="utf-8") as g: g.write("strategy=safe\n")
-              print("Using protected RTP1 draft path.")
+              print(f"Using protected RTP1 draft path for {expected} occurrence(s).")
               raise SystemExit(0)
-          if len(safe)>1:
-              raise SystemExit(f"Safety stop: {len(safe)} editable catalogue matches.")
+          if len(safe)>0:
+              raise SystemExit(f"Safety stop: expected {expected} editable catalogue matches, found {len(safe)}.")
 
           def replace_recursive(v):
               count=0
@@ -216,19 +220,19 @@ jobs:
 
           print("Elementor meta occurrences:",meta_count)
           print("Raw content occurrences:",raw_count)
-          if meta_count!=1:
-              raise SystemExit(f"Safety stop: expected exactly one occurrence in Elementor data, found {meta_count}.")
-          if raw_count>1:
-              raise SystemExit(f"Safety stop: raw content contains {raw_count} occurrences.")
+          if meta_count!=expected:
+              raise SystemExit(f"Safety stop: expected {expected} occurrence(s) in Elementor data, found {meta_count}.")
+          if raw_count not in (0,expected):
+              raise SystemExit(f"Safety stop: expected 0 or {expected} occurrence(s) in raw content, found {raw_count}.")
 
           update={"meta":{"_elementor_data":new_meta}}
           rollback={"meta":{"_elementor_data":meta}}
-          if raw_count==1:
+          if raw_count==expected:
               update["content"]=new_raw
               rollback["content"]=raw
           json.dump(update,open("core-update.json","w",encoding="utf-8"),ensure_ascii=False,separators=(",",":"))
           json.dump(rollback,open("core-rollback.json","w",encoding="utf-8"),ensure_ascii=False,separators=(",",":"))
-          json.dump({"rawUpdated":raw_count==1,"source":source,"replacement":replacement},open("core-plan.json","w",encoding="utf-8"),ensure_ascii=False)
+          json.dump({"rawUpdated":raw_count==expected,"source":source,"replacement":replacement,"expected":expected},open("core-plan.json","w",encoding="utf-8"),ensure_ascii=False)
           with open(out,"a",encoding="utf-8") as g: g.write("strategy=core\n")
           print("Using guarded core REST fallback for unsupported Elementor widget.")
           PY
