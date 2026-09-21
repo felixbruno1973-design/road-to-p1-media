@@ -1,0 +1,380 @@
+name: ROAD TO P1 Exact Text Command
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - site-command.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: road-to-p1-site-command
+  cancel-in-progress: false
+
+jobs:
+  run-command:
+    runs-on: ubuntu-latest
+    env:
+      WP_URL: https://road-to-p1.com
+      WP_USERNAME: roadtop1-media
+      RTP1_API: /wp-json/rtp1-media/v1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate command
+        id: command
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, re
+          d=json.load(open("site-command.json",encoding="utf-8"))
+          enabled=bool(d.get("enabled",False))
+          cid=d.get("command_id","")
+          mode=d.get("mode","")
+          path=d.get("page_path","")
+          source=d.get("source_text","")
+          replacement=d.get("replacement_text","")
+          confirm=d.get("confirm",False)
+          if not isinstance(cid,str) or not re.fullmatch(r"[A-Za-z0-9._-]{1,80}",cid):
+              raise SystemExit("Invalid command_id")
+          if mode!="exact_text_replace":
+              raise SystemExit("Only exact_text_replace is supported")
+          if not isinstance(path,str) or not path.startswith("/") or "://" in path or ".." in path:
+              raise SystemExit("Invalid page_path")
+          if not isinstance(source,str) or not source or len(source)>1000:
+              raise SystemExit("Invalid source_text")
+          if not isinstance(replacement,str) or not replacement or len(replacement)>1000:
+              raise SystemExit("Invalid replacement_text")
+          if source==replacement:
+              raise SystemExit("Source and replacement are identical")
+          if not isinstance(confirm,bool):
+              raise SystemExit("confirm must be boolean")
+          with open(os.environ["GITHUB_OUTPUT"],"a",encoding="utf-8") as g:
+              g.write(f"enabled={'true' if enabled else 'false'}\n")
+          print("Command:",cid)
+          print("Enabled:",enabled)
+          print("Path:",path)
+          print("Confirm:",confirm)
+          PY
+
+      - name: Disabled command
+        if: steps.command.outputs.enabled != 'true'
+        run: echo "Command disabled; no site change."
+
+      - name: Check WordPress credential
+        if: steps.command.outputs.enabled == 'true'
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$RTP1_WP_APP_PASSWORD" ]; then
+            echo "::error::Missing RTP1_WP_APP_PASSWORD."
+            exit 1
+          fi
+
+      - name: Resolve page
+        if: steps.command.outputs.enabled == 'true'
+        id: page
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CODE="$(curl -sS -o pages.json -w '%{http_code}' \
+            -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" \
+            -H "Accept: application/json" \
+            "$WP_URL$RTP1_API/pages")"
+          if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ]; then
+            jq . pages.json 2>/dev/null || cat pages.json
+            echo "::error::Unable to list WordPress pages (HTTP $CODE)."
+            exit 1
+          fi
+          PAGE_ID="$(python - <<'PY'
+          import json
+          from urllib.parse import urlparse
+          cmd=json.load(open("site-command.json",encoding="utf-8"))
+          data=json.load(open("pages.json",encoding="utf-8"))
+          target=cmd["page_path"].rstrip("/") or "/"
+          matches=[]
+          for p in data.get("pages",[]):
+              pp=urlparse(p.get("link","")).path.rstrip("/") or "/"
+              if pp==target: matches.append(p)
+          if len(matches)!=1:
+              raise SystemExit(f"Expected one page for {target!r}; found {len(matches)}")
+          print(matches[0]["id"])
+          PY
+          )"
+          echo "page_id=$PAGE_ID" >> "$GITHUB_OUTPUT"
+          echo "Resolved page ID: $PAGE_ID"
+
+      - name: Read current page state
+        if: steps.command.outputs.enabled == 'true'
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+          PAGE_ID: ${{ steps.page.outputs.page_id }}
+        run: |
+          set -euo pipefail
+          SNAP_CODE="$(curl -sS -o snapshot.json -w '%{http_code}' \
+            -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" \
+            -H "Accept: application/json" \
+            "$WP_URL$RTP1_API/snapshot/$PAGE_ID")"
+          CORE_CODE="$(curl -sS -o core-page.json -w '%{http_code}' \
+            -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" \
+            -H "Accept: application/json" \
+            "$WP_URL/wp-json/wp/v2/pages/$PAGE_ID?context=edit")"
+          if [ "$SNAP_CODE" -lt 200 ] || [ "$SNAP_CODE" -ge 300 ] || [ "$CORE_CODE" -lt 200 ] || [ "$CORE_CODE" -ge 300 ]; then
+            echo "::error::Unable to read page state (snapshot $SNAP_CODE / core $CORE_CODE)."
+            exit 1
+          fi
+          jq '{page,revision,elementCount:(.elements|length)}' snapshot.json
+
+      - name: Prepare exact replacement
+        if: steps.command.outputs.enabled == 'true'
+        id: plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+
+          cmd=json.load(open("site-command.json",encoding="utf-8"))
+          snap=json.load(open("snapshot.json",encoding="utf-8"))
+          core=json.load(open("core-page.json",encoding="utf-8"))
+          source=cmd["source_text"]
+          replacement=cmd["replacement_text"]
+
+          safe=[]
+          for element in snap.get("elements",[]):
+              eid=element.get("id","")
+              settings=element.get("settings") or {}
+              controls=element.get("controls") or {}
+              for key in ("title","text","editor"):
+                  value=settings.get(key)
+                  if key in controls and isinstance(value,str) and source in value:
+                      safe.append({
+                          "kind":"setting","elementId":eid,"key":key,"selector":"",
+                          "device":"all",
+                          "value":json.dumps(value.replace(source,replacement),ensure_ascii=False),
+                          "reason":f"Correction exacte de « {source} » en « {replacement} »."
+                      })
+              html=element.get("html") or {}
+              for text_node in html.get("texts",[]):
+                  if isinstance(text_node,str) and source in text_node:
+                      safe.append({
+                          "kind":"html_text","elementId":eid,"key":text_node,"selector":"",
+                          "device":"all","value":text_node.replace(source,replacement),
+                          "reason":f"Correction exacte de « {source} » en « {replacement} »."
+                      })
+
+          out=os.environ["GITHUB_OUTPUT"]
+          if len(safe)==1:
+              body={
+                  "pageId":int(snap["page"]["id"]),
+                  "revision":snap["revision"],
+                  "instruction":f"Remplacer uniquement « {source} » par « {replacement} ».",
+                  "summary":f"Correction : {source} → {replacement}",
+                  "device":"all",
+                  "changes":safe
+              }
+              json.dump(body,open("draft-request.json","w",encoding="utf-8"),ensure_ascii=False,separators=(",",":"))
+              with open(out,"a",encoding="utf-8") as g: g.write("strategy=safe\n")
+              print("Using protected RTP1 draft path.")
+              raise SystemExit(0)
+          if len(safe)>1:
+              raise SystemExit(f"Safety stop: {len(safe)} editable catalogue matches.")
+
+          def replace_recursive(v):
+              count=0
+              if isinstance(v,str):
+                  count=v.count(source)
+                  return v.replace(source,replacement),count
+              if isinstance(v,list):
+                  outv=[]
+                  for x in v:
+                      nx,c=replace_recursive(x); outv.append(nx); count+=c
+                  return outv,count
+              if isinstance(v,dict):
+                  outv={}
+                  for k,x in v.items():
+                      nx,c=replace_recursive(x); outv[k]=nx; count+=c
+                  return outv,count
+              return v,0
+
+          meta=(core.get("meta") or {}).get("_elementor_data")
+          if meta is None:
+              raise SystemExit("Safety stop: _elementor_data is unavailable through WordPress REST.")
+          new_meta,meta_count=replace_recursive(meta)
+          raw=((core.get("content") or {}).get("raw"))
+          if not isinstance(raw,str):
+              raw=""
+          new_raw,raw_count=replace_recursive(raw)
+
+          print("Elementor meta occurrences:",meta_count)
+          print("Raw content occurrences:",raw_count)
+          if meta_count!=1:
+              raise SystemExit(f"Safety stop: expected exactly one occurrence in Elementor data, found {meta_count}.")
+          if raw_count>1:
+              raise SystemExit(f"Safety stop: raw content contains {raw_count} occurrences.")
+
+          update={"meta":{"_elementor_data":new_meta}}
+          rollback={"meta":{"_elementor_data":meta}}
+          if raw_count==1:
+              update["content"]=new_raw
+              rollback["content"]=raw
+          json.dump(update,open("core-update.json","w",encoding="utf-8"),ensure_ascii=False,separators=(",",":"))
+          json.dump(rollback,open("core-rollback.json","w",encoding="utf-8"),ensure_ascii=False,separators=(",",":"))
+          json.dump({"rawUpdated":raw_count==1,"source":source,"replacement":replacement},open("core-plan.json","w",encoding="utf-8"),ensure_ascii=False)
+          with open(out,"a",encoding="utf-8") as g: g.write("strategy=core\n")
+          print("Using guarded core REST fallback for unsupported Elementor widget.")
+          PY
+
+      - name: Create protected draft
+        if: steps.command.outputs.enabled == 'true' && steps.plan.outputs.strategy == 'safe'
+        id: draft
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CODE="$(curl -sS -o draft-response.json -w '%{http_code}' \
+            -X POST -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" \
+            -H "Content-Type: application/json" \
+            --data-binary @draft-request.json \
+            "$WP_URL$RTP1_API/draft")"
+          if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ] || [ "$(jq -r '.ok // false' draft-response.json 2>/dev/null)" != "true" ]; then
+            jq . draft-response.json 2>/dev/null || cat draft-response.json
+            echo "::error::Draft failed (HTTP $CODE)."
+            exit 1
+          fi
+          DRAFT_ID="$(jq -r '.draft.id' draft-response.json)"
+          echo "draft_id=$DRAFT_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Generate protected preview
+        if: steps.command.outputs.enabled == 'true' && steps.plan.outputs.strategy == 'safe'
+        id: preview
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+          DRAFT_ID: ${{ steps.draft.outputs.draft_id }}
+        run: |
+          set -euo pipefail
+          jq -n --arg draftId "$DRAFT_ID" '{draftId:$draftId}' > preview-request.json
+          CODE="$(curl -sS -o preview-response.json -w '%{http_code}' \
+            -X POST -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" \
+            -H "Content-Type: application/json" \
+            --data-binary @preview-request.json \
+            "$WP_URL$RTP1_API/preview")"
+          if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ] || [ "$(jq -r '.ok // false' preview-response.json 2>/dev/null)" != "true" ]; then
+            jq '{ok,code,message,data}' preview-response.json 2>/dev/null || cat preview-response.json
+            echo "::error::Preview failed (HTTP $CODE); nothing published."
+            exit 1
+          fi
+          HASH="$(jq -r '.reviewHash // empty' preview-response.json)"
+          if [ -z "$HASH" ]; then echo "::error::Preview returned no review hash."; exit 1; fi
+          echo "review_hash=$HASH" >> "$GITHUB_OUTPUT"
+
+      - name: Publish protected draft
+        if: steps.command.outputs.enabled == 'true' && steps.plan.outputs.strategy == 'safe'
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+          DRAFT_ID: ${{ steps.draft.outputs.draft_id }}
+          REVIEW_HASH: ${{ steps.preview.outputs.review_hash }}
+        run: |
+          set -euo pipefail
+          if [ "$(jq -r '.confirm' site-command.json)" != "true" ]; then
+            echo "Draft prepared but not published."
+            exit 0
+          fi
+          jq -n --arg draftId "$DRAFT_ID" --arg reviewHash "$REVIEW_HASH" \
+            '{draftId:$draftId,reviewHash:$reviewHash,confirm:true}' > apply-request.json
+          CODE="$(curl -sS -o apply-response.json -w '%{http_code}' \
+            -X POST -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" \
+            -H "Content-Type: application/json" \
+            --data-binary @apply-request.json \
+            "$WP_URL$RTP1_API/apply")"
+          if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ] || [ "$(jq -r '.draft.status // empty' apply-response.json 2>/dev/null)" != "applied" ]; then
+            jq . apply-response.json 2>/dev/null || cat apply-response.json
+            echo "::error::Protected publication failed (HTTP $CODE)."
+            exit 1
+          fi
+          echo "Protected WordPress publication confirmed."
+
+      - name: Apply guarded Elementor meta replacement
+        if: steps.command.outputs.enabled == 'true' && steps.plan.outputs.strategy == 'core'
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+          PAGE_ID: ${{ steps.page.outputs.page_id }}
+        run: |
+          set -euo pipefail
+          if [ "$(jq -r '.confirm' site-command.json)" != "true" ]; then
+            echo "Core replacement prepared but not published."
+            exit 0
+          fi
+
+          CODE="$(curl -sS -o update-response.json -w '%{http_code}' \
+            -X POST -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" \
+            -H "Content-Type: application/json" \
+            --data-binary @core-update.json \
+            "$WP_URL/wp-json/wp/v2/pages/$PAGE_ID")"
+          if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ]; then
+            jq . update-response.json 2>/dev/null || cat update-response.json
+            echo "::error::WordPress core update failed (HTTP $CODE)."
+            exit 1
+          fi
+
+          VERIFY_CODE="$(curl -sS -o verify-core.json -w '%{http_code}' \
+            -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" \
+            -H "Accept: application/json" \
+            "$WP_URL/wp-json/wp/v2/pages/$PAGE_ID?context=edit")"
+          if [ "$VERIFY_CODE" -lt 200 ] || [ "$VERIFY_CODE" -ge 300 ]; then
+            echo "::error::Could not verify update. Restoring previous page data."
+            curl -sS -o rollback-response.json -X POST \
+              -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" \
+              -H "Content-Type: application/json" \
+              --data-binary @core-rollback.json \
+              "$WP_URL/wp-json/wp/v2/pages/$PAGE_ID" >/dev/null
+            exit 1
+          fi
+
+          python - <<'PY'
+          import json, sys
+          verify=json.load(open("verify-core.json",encoding="utf-8"))
+          plan=json.load(open("core-plan.json",encoding="utf-8"))
+          source=plan["source"]; replacement=plan["replacement"]
+
+          def count_recursive(v, needle):
+              if isinstance(v,str): return v.count(needle)
+              if isinstance(v,list): return sum(count_recursive(x,needle) for x in v)
+              if isinstance(v,dict): return sum(count_recursive(x,needle) for x in v.values())
+              return 0
+
+          meta=(verify.get("meta") or {}).get("_elementor_data")
+          raw=((verify.get("content") or {}).get("raw")) or ""
+          source_meta=count_recursive(meta,source)
+          replacement_meta=count_recursive(meta,replacement)
+          source_raw=count_recursive(raw,source)
+          print("Verification: source in Elementor meta =",source_meta)
+          print("Verification: replacement in Elementor meta =",replacement_meta)
+          print("Verification: source in raw content =",source_raw)
+          ok=(source_meta==0 and replacement_meta>=1)
+          if plan.get("rawUpdated"): ok=ok and source_raw==0
+          if not ok: sys.exit(2)
+          PY
+          VERIFY_RESULT="$?"
+          if [ "$VERIFY_RESULT" != "0" ]; then
+            echo "::error::Verification failed. Restoring previous page data."
+            curl -sS -o rollback-response.json -X POST \
+              -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" \
+              -H "Content-Type: application/json" \
+              --data-binary @core-rollback.json \
+              "$WP_URL/wp-json/wp/v2/pages/$PAGE_ID" >/dev/null
+            exit 1
+          fi
+          echo "Exact Elementor text replacement verified."
