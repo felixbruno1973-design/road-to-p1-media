@@ -1,0 +1,38 @@
+name: ROAD TO P1 Inspect EN Partners Mobile
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - inspect-en-partners-mobile.json
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    env:
+      WP_URL: https://road-to-p1.com
+      WP_USERNAME: roadtop1-media
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch and inspect
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          curl -sS -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" -H "Accept: application/json" "$WP_URL/wp-json/wp/v2/pages/10517?context=edit" > page.json
+          jq -r '.meta._elementor_data' page.json > el.json
+          python - <<'PY'
+          import json
+          d=json.load(open("el.json",encoding="utf-8"))
+          ids={"8f33e70","2f26c83","412d480","c63e02a","8735702","bb25799"}
+          def walk(nodes,parent=""):
+              for n in nodes or []:
+                  if n.get("id") in ids:
+                      print(json.dumps({"id":n.get("id"),"parent":parent,"widgetType":n.get("widgetType"),"settings":n.get("settings")},ensure_ascii=False))
+                  walk(n.get("elements") or [],n.get("id",""))
+          walk(d)
+          PY
