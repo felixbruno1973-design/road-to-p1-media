@@ -1,8 +1,8 @@
 {
-  "enabled": false,
-  "command_id": "setup",
-  "page_path": "/",
-  "instruction": "Bridge setup only; do not publish.",
+  "enabled": true,
+  "command_id": "fix-mise-en-relation-20260921",
+  "page_path": "/road-to-p1/",
+  "instruction": "Corriger uniquement la coquille « Mise en reation » en « Mise en relation ». Ne modifier aucun autre texte, style, mise en page ou élément de la page.",
   "device": "all",
-  "confirm": false
+  "confirm": true
 }
