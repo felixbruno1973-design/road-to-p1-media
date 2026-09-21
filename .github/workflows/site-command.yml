@@ -18,7 +18,9 @@ jobs:
   run-command:
     runs-on: ubuntu-latest
     env:
-      WORKER_URL: https://road-to-p1-media-api.felix-bruno1973.workers.dev
+      WP_URL: https://road-to-p1.com
+      WP_USERNAME: roadtop1-media
+      API: /wp-json/rtp1-media/v1
     steps:
       - uses: actions/checkout@v4
 
@@ -29,48 +31,53 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           import json, os, re
-          p = "site-command.json"
-          with open(p, encoding="utf-8") as f:
+          with open("site-command.json", encoding="utf-8") as f:
               d = json.load(f)
           enabled = bool(d.get("enabled", False))
-          path = d.get("page_path", "")
-          instruction = d.get("instruction", "")
-          device = d.get("device", "")
           command_id = d.get("command_id", "")
+          mode = d.get("mode", "")
+          path = d.get("page_path", "")
+          source = d.get("source_text", "")
+          replacement = d.get("replacement_text", "")
           confirm = d.get("confirm", False)
+
           if not isinstance(command_id, str) or not re.fullmatch(r"[A-Za-z0-9._-]{1,80}", command_id):
               raise SystemExit("Invalid command_id")
+          if mode != "exact_text_replace":
+              raise SystemExit("Only exact_text_replace is enabled on this bridge")
           if not isinstance(path, str) or not path.startswith("/") or "://" in path or ".." in path:
               raise SystemExit("Invalid page_path")
-          if not isinstance(instruction, str) or not (5 <= len(instruction) <= 4000):
-              raise SystemExit("Invalid instruction")
-          if device not in {"all","mobile","tablet","desktop"}:
-              raise SystemExit("Invalid device")
+          if not isinstance(source, str) or not source or len(source) > 1000:
+              raise SystemExit("Invalid source_text")
+          if not isinstance(replacement, str) or not replacement or len(replacement) > 1000:
+              raise SystemExit("Invalid replacement_text")
+          if source == replacement:
+              raise SystemExit("Source and replacement are identical")
           if not isinstance(confirm, bool):
               raise SystemExit("confirm must be boolean")
-          out = os.environ["GITHUB_OUTPUT"]
-          with open(out, "a", encoding="utf-8") as g:
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as g:
               g.write(f"enabled={'true' if enabled else 'false'}\n")
           print("Command:", command_id)
           print("Enabled:", enabled)
           print("Target path:", path)
-          print("Device:", device)
+          print("Mode:", mode)
           print("Confirm:", confirm)
           PY
 
-      - name: Setup placeholder
+      - name: Disabled command
         if: steps.command.outputs.enabled != 'true'
-        run: echo "Bridge installed. Command is disabled, so nothing will be sent to WordPress."
+        run: echo "Command disabled; nothing sent to WordPress."
 
-      - name: Check bridge secret
+      - name: Check WordPress secret
         if: steps.command.outputs.enabled == 'true'
         shell: bash
         env:
-          RTP1_WRITE_KEY: ${{ secrets.RTP1_WRITE_KEY }}
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
         run: |
           set -euo pipefail
-          if [ -z "$RTP1_WRITE_KEY" ]; then
-            echo "::error::Missing repository secret RTP1_WRITE_KEY. Add the same value used as WRITE_KEY in the Cloudflare Worker."
+          if [ -z "$RTP1_WP_APP_PASSWORD" ]; then
+            echo "::error::Missing repository secret RTP1_WP_APP_PASSWORD."
             exit 1
           fi
 
@@ -79,12 +86,19 @@ jobs:
         id: page
         shell: bash
         env:
-          RTP1_WRITE_KEY: ${{ secrets.RTP1_WRITE_KEY }}
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
         run: |
           set -euo pipefail
-          curl -sS --fail-with-body \
-            -H "X-RTP1-Key: $RTP1_WRITE_KEY" \
-            "$WORKER_URL/pages" > pages.json
+          HTTP_CODE="$(curl -sS -o pages.json -w '%{http_code}' \
+            -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" \
+            -H "Accept: application/json" \
+            "$WP_URL$API/pages")"
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            jq . pages.json 2>/dev/null || cat pages.json
+            echo "::error::WordPress pages request failed (HTTP $HTTP_CODE)."
+            exit 1
+          fi
 
           PAGE_ID="$(python - <<'PY'
           import json
@@ -103,108 +117,176 @@ jobs:
           PY
           )"
           echo "page_id=$PAGE_ID" >> "$GITHUB_OUTPUT"
-          echo "Resolved page ID: $PAGE_ID"
+          echo "Resolved WordPress page ID: $PAGE_ID"
 
-      - name: Create protected draft
+      - name: Read page snapshot
+        if: steps.command.outputs.enabled == 'true'
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+          PAGE_ID: ${{ steps.page.outputs.page_id }}
+        run: |
+          set -euo pipefail
+          HTTP_CODE="$(curl -sS -o snapshot.json -w '%{http_code}' \
+            -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" \
+            -H "Accept: application/json" \
+            "$WP_URL$API/snapshot/$PAGE_ID")"
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            jq . snapshot.json 2>/dev/null || cat snapshot.json
+            echo "::error::WordPress snapshot failed (HTTP $HTTP_CODE)."
+            exit 1
+          fi
+          jq '{ok,page,revision,elementCount:(.elements|length)}' snapshot.json
+
+      - name: Build exact replacement draft
+        if: steps.command.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+
+          cmd = json.load(open("site-command.json", encoding="utf-8"))
+          snap = json.load(open("snapshot.json", encoding="utf-8"))
+          source = cmd["source_text"]
+          replacement = cmd["replacement_text"]
+          matches = []
+
+          for element in snap.get("elements", []):
+              element_id = element.get("id", "")
+              settings = element.get("settings") or {}
+              controls = element.get("controls") or {}
+
+              for key in ("title", "text", "editor"):
+                  value = settings.get(key)
+                  if key in controls and isinstance(value, str) and source in value:
+                      matches.append({
+                          "kind": "setting",
+                          "elementId": element_id,
+                          "key": key,
+                          "selector": "",
+                          "device": "all",
+                          "value": json.dumps(value.replace(source, replacement), ensure_ascii=False),
+                          "reason": f"Correction exacte de « {source} » en « {replacement} »."
+                      })
+
+              html = element.get("html") or {}
+              for text_node in html.get("texts", []):
+                  if isinstance(text_node, str) and source in text_node:
+                      matches.append({
+                          "kind": "html_text",
+                          "elementId": element_id,
+                          "key": text_node,
+                          "selector": "",
+                          "device": "all",
+                          "value": text_node.replace(source, replacement),
+                          "reason": f"Correction exacte de « {source} » en « {replacement} »."
+                      })
+
+          if len(matches) != 1:
+              raise SystemExit(f"Safety stop: expected exactly one editable occurrence of {source!r}, found {len(matches)}")
+
+          body = {
+              "pageId": int(snap["page"]["id"]),
+              "revision": snap["revision"],
+              "instruction": f"Remplacer uniquement « {source} » par « {replacement} ».",
+              "summary": f"Correction : {source} → {replacement}",
+              "device": "all",
+              "changes": matches
+          }
+          with open("draft-request.json","w",encoding="utf-8") as f:
+              json.dump(body,f,ensure_ascii=False,separators=(",",":"))
+          print("Exactly one editable occurrence found.")
+          print("Element:", matches[0]["elementId"], "kind:", matches[0]["kind"], "key:", matches[0]["key"])
+          PY
+
+      - name: Create protected WordPress draft
         if: steps.command.outputs.enabled == 'true'
         id: draft
         shell: bash
         env:
-          RTP1_WRITE_KEY: ${{ secrets.RTP1_WRITE_KEY }}
-          PAGE_ID: ${{ steps.page.outputs.page_id }}
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
         run: |
           set -euo pipefail
-          jq --argjson pageId "$PAGE_ID" \
-             '{pageId:$pageId, device:.device, instruction:.instruction}' \
-             site-command.json > draft-request.json
-
-          HTTP_CODE="$(curl -sS \
-            -o draft-response.json \
-            -w '%{http_code}' \
+          HTTP_CODE="$(curl -sS -o draft-response.json -w '%{http_code}' \
             -X POST \
-            -H "X-RTP1-Key: $RTP1_WRITE_KEY" \
+            -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" \
             -H "Content-Type: application/json" \
             --data-binary @draft-request.json \
-            "$WORKER_URL/draft")"
+            "$WP_URL$API/draft")"
 
-          jq . draft-response.json || cat draft-response.json
+          jq '.draft | {id,status,summary,diff}' draft-response.json 2>/dev/null || cat draft-response.json
           if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ] || [ "$(jq -r '.ok // false' draft-response.json 2>/dev/null)" != "true" ]; then
-            MSG="$(jq -r '.message // "Worker refused draft"' draft-response.json 2>/dev/null || echo "Worker refused draft")"
-            echo "::error::Draft failed (HTTP $HTTP_CODE): $MSG"
+            echo "::error::WordPress draft failed (HTTP $HTTP_CODE)."
             exit 1
           fi
-          CLARIFICATION="$(jq -r '.clarification // empty' draft-response.json)"
-          if [ -n "$CLARIFICATION" ]; then
-            echo "::error::Draft needs clarification: $CLARIFICATION"
-            exit 1
-          fi
-          DRAFT_ID="$(jq -r '.draft.id // empty' draft-response.json)"
-          if [ -z "$DRAFT_ID" ]; then
-            echo "::error::No draft id returned"
-            exit 1
-          fi
+
+          DRAFT_ID="$(jq -r '.draft.id' draft-response.json)"
           echo "draft_id=$DRAFT_ID" >> "$GITHUB_OUTPUT"
 
-      - name: Generate preview and review hash
+      - name: Generate protected preview
         if: steps.command.outputs.enabled == 'true'
         id: preview
         shell: bash
         env:
-          RTP1_WRITE_KEY: ${{ secrets.RTP1_WRITE_KEY }}
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
           DRAFT_ID: ${{ steps.draft.outputs.draft_id }}
         run: |
           set -euo pipefail
           jq -n --arg draftId "$DRAFT_ID" '{draftId:$draftId}' > preview-request.json
-
-          curl -sS --fail-with-body \
+          HTTP_CODE="$(curl -sS -o preview-response.json -w '%{http_code}' \
             -X POST \
-            -H "X-RTP1-Key: $RTP1_WRITE_KEY" \
+            -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" \
             -H "Content-Type: application/json" \
             --data-binary @preview-request.json \
-            "$WORKER_URL/preview" > preview-response.json
+            "$WP_URL$API/preview")"
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ] || [ "$(jq -r '.ok // false' preview-response.json 2>/dev/null)" != "true" ]; then
+            jq '{ok,code,message,data}' preview-response.json 2>/dev/null || cat preview-response.json
+            echo "::error::WordPress preview failed (HTTP $HTTP_CODE). Nothing was published."
+            exit 1
+          fi
 
           REVIEW_HASH="$(jq -r '.reviewHash // empty' preview-response.json)"
           if [ -z "$REVIEW_HASH" ]; then
-            jq . preview-response.json
-            echo "::error::No review hash returned"
+            echo "::error::Preview returned no review hash."
             exit 1
           fi
           echo "review_hash=$REVIEW_HASH" >> "$GITHUB_OUTPUT"
           echo "Protected preview generated successfully."
 
-      - name: Publish confirmed command
+      - name: Publish confirmed exact replacement
         if: steps.command.outputs.enabled == 'true'
         shell: bash
         env:
-          RTP1_WRITE_KEY: ${{ secrets.RTP1_WRITE_KEY }}
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
           DRAFT_ID: ${{ steps.draft.outputs.draft_id }}
           REVIEW_HASH: ${{ steps.preview.outputs.review_hash }}
         run: |
           set -euo pipefail
           CONFIRM="$(jq -r '.confirm' site-command.json)"
           if [ "$CONFIRM" != "true" ]; then
-            echo "Command requested draft/preview only. Nothing published."
+            echo "Draft and preview created; publication not confirmed."
             exit 0
           fi
 
-          jq -n \
-            --arg draftId "$DRAFT_ID" \
-            --arg reviewHash "$REVIEW_HASH" \
-            '{draftId:$draftId, reviewHash:$reviewHash, confirm:true}' \
-            > apply-request.json
+          jq -n --arg draftId "$DRAFT_ID" --arg reviewHash "$REVIEW_HASH" \
+            '{draftId:$draftId,reviewHash:$reviewHash,confirm:true}' > apply-request.json
 
-          curl -sS --fail-with-body \
+          HTTP_CODE="$(curl -sS -o apply-response.json -w '%{http_code}' \
             -X POST \
-            -H "X-RTP1-Key: $RTP1_WRITE_KEY" \
+            -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" \
             -H "Content-Type: application/json" \
             --data-binary @apply-request.json \
-            "$WORKER_URL/apply" > apply-response.json
+            "$WP_URL$API/apply")"
 
-          jq . apply-response.json
-          if [ "$(jq -r '.ok // false' apply-response.json)" != "true" ]; then
-            echo "::error::Publication not confirmed by Worker"
+          jq '.draft | {id,status,summary,receipt}' apply-response.json 2>/dev/null || cat apply-response.json
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ] || [ "$(jq -r '.ok // false' apply-response.json 2>/dev/null)" != "true" ]; then
+            echo "::error::Publication failed (HTTP $HTTP_CODE). Check history before retrying."
             exit 1
           fi
+
           STATUS="$(jq -r '.draft.status // empty' apply-response.json)"
           if [ "$STATUS" != "applied" ]; then
             echo "::error::Unexpected draft status: $STATUS"
