@@ -51,21 +51,23 @@ jobs:
       - name: Build aligned English homepage
         run: python scripts/sync_english_home.py
 
-      - name: Publish with WAF retries
+      - name: Publish with alternate REST methods
         shell: bash
         env:
           RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
         run: |
           set -euo pipefail
           OK=0
-          for ATTEMPT in 1 2 3 4 5 6 7 8 9 10 11 12; do
-            CODE="$(curl -sS -o response.json -w '%{http_code}' -X POST -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" -H "Content-Type: application/json" --data-binary @en-update.json "$WP_URL/wp-json/wp/v2/pages/9968")"
-            echo "Publish attempt $ATTEMPT -> HTTP $CODE"
-            if [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ]; then OK=1; break; fi
-            sleep 5
+          for METHOD in PUT PATCH POST; do
+            for ATTEMPT in 1 2 3 4; do
+              CODE="$(curl -sS -o response.json -w '%{http_code}' -X "$METHOD" -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" -H "Content-Type: application/json" --data-binary @en-update.json "$WP_URL/wp-json/wp/v2/pages/9968")"
+              echo "$METHOD attempt $ATTEMPT -> HTTP $CODE"
+              if [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ]; then OK=1; break 2; fi
+              sleep 4
+            done
           done
           if [ "$OK" != "1" ]; then
-            echo "::error::English homepage write blocked after retries."
+            echo "::error::English homepage write blocked for PUT/PATCH/POST."
             jq . response.json 2>/dev/null || true
             exit 1
           fi
