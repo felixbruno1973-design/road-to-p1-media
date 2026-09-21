@@ -62,14 +62,17 @@ jobs:
               s=re.sub(r"<[^>]+>"," ",s)
               s=re.sub(r"\s+"," ",s).strip()
               return s[:220]
-          keys=("title","editor","text","html","button_text","heading","description")
+          keys=("title","editor","text","html","button_text","heading","description","link")
           def walk(nodes,depth=0,parent=""):
               for i,n in enumerate(nodes or []):
                   st=n.get("settings") or {}
                   vals=[]
                   for k in keys:
                       if k in st and st[k]:
-                          vals.append(f"{k}={clean(st[k])!r}")
+                          if k=="link" and isinstance(st[k],dict):
+                              vals.append(f"link={st[k].get('url','')!r}")
+                          else:
+                              vals.append(f"{k}={clean(st[k])!r}")
                   print("  "*depth+f"- id={n.get('id')} elType={n.get('elType')} widgetType={n.get('widgetType')} parent={parent} "+(" | ".join(vals)))
                   walk(n.get("elements") or [],depth+1,n.get("id",""))
           print("TITLE:",(p.get("title") or {}).get("raw"))
