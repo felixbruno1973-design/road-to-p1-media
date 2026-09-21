@@ -76,3 +76,9 @@ for fn in ("media-flyer.json","media-2027.json"):
             },ensure_ascii=False))
     else:
         print(json.dumps(data,ensure_ascii=False)[:3000])
+
+print("=== ALL ENGLISH PAGES ===")
+for p in pages.get("pages",[]):
+    link=p.get("link","")
+    if "/en/" in urlparse(link).path:
+        print(json.dumps({"id":p.get("id"),"title":p.get("title",""),"link":link,"path":urlparse(link).path},ensure_ascii=False))
