@@ -1,0 +1,172 @@
+name: ROAD TO P1 Refresh Partenaires Cache
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - partners-cache-refresh.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: road-to-p1-partners-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    env:
+      WP_URL: https://road-to-p1.com
+      WP_USERNAME: roadtop1-media
+      RTP1_API: /wp-json/rtp1-media/v1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e '.confirm == true and .page_id == 11 and .page_path == "/partenaires/" and .element_id == "412d480"' partners-cache-refresh.json >/dev/null
+
+      - name: Toggle heading through protected draft flow
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          run_change () {
+            local TARGET="$1"
+            local LABEL="$2"
+
+            CODE="$(curl -sS -o snapshot.json -w '%{http_code}' \
+              -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" \
+              -H "Accept: application/json" \
+              "$WP_URL$RTP1_API/snapshot/11")"
+            if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ]; then
+              jq . snapshot.json 2>/dev/null || cat snapshot.json
+              echo "::error::Snapshot failed (HTTP $CODE)"
+              exit 1
+            fi
+
+            python - "$TARGET" "$LABEL" <<'PY'
+import json,sys
+target=sys.argv[1]
+label=sys.argv[2]
+snap=json.load(open("snapshot.json",encoding="utf-8"))
+body={
+  "pageId":11,
+  "revision":snap["revision"],
+  "instruction":f"Maintenance cache Elementor: {label}",
+  "summary":f"Maintenance cache: {label}",
+  "device":"all",
+  "changes":[{
+    "kind":"setting",
+    "elementId":"412d480",
+    "key":"title",
+    "selector":"",
+    "device":"all",
+    "value":json.dumps(target,ensure_ascii=False),
+    "reason":"Régénération contrôlée du rendu Elementor et des caches."
+  }]
+}
+json.dump(body,open("draft-request.json","w",encoding="utf-8"),ensure_ascii=False,separators=(",",":"))
+PY
+
+            CODE="$(curl -sS -o draft.json -w '%{http_code}' \
+              -X POST \
+              -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" \
+              -H "Content-Type: application/json" \
+              --data-binary @draft-request.json \
+              "$WP_URL$RTP1_API/draft")"
+            if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ] || [ "$(jq -r '.ok // false' draft.json)" != "true" ]; then
+              jq . draft.json 2>/dev/null || cat draft.json
+              echo "::error::Draft failed (HTTP $CODE)"
+              exit 1
+            fi
+            DRAFT_ID="$(jq -r '.draft.id' draft.json)"
+
+            jq -n --arg draftId "$DRAFT_ID" '{draftId:$draftId}' > preview-request.json
+            CODE="$(curl -sS -o preview.json -w '%{http_code}' \
+              -X POST \
+              -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" \
+              -H "Content-Type: application/json" \
+              --data-binary @preview-request.json \
+              "$WP_URL$RTP1_API/preview")"
+            if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ] || [ "$(jq -r '.ok // false' preview.json)" != "true" ]; then
+              jq . preview.json 2>/dev/null || cat preview.json
+              echo "::error::Preview failed (HTTP $CODE)"
+              exit 1
+            fi
+            REVIEW_HASH="$(jq -r '.reviewHash' preview.json)"
+
+            jq -n --arg draftId "$DRAFT_ID" --arg reviewHash "$REVIEW_HASH" \
+              '{draftId:$draftId,reviewHash:$reviewHash,confirm:true}' > apply-request.json
+            CODE="$(curl -sS -o apply.json -w '%{http_code}' \
+              -X POST \
+              -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" \
+              -H "Content-Type: application/json" \
+              --data-binary @apply-request.json \
+              "$WP_URL$RTP1_API/apply")"
+            if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ] || [ "$(jq -r '.ok // false' apply.json)" != "true" ]; then
+              jq . apply.json 2>/dev/null || cat apply.json
+              echo "::error::Apply failed (HTTP $CODE)"
+              exit 1
+            fi
+            jq '{ok,message,warning,draft:.draft.status}' apply.json
+          }
+
+          FINAL="$(jq -r '.final_title' partners-cache-refresh.json)"
+          TEMP="$FINAL "
+          run_change "$TEMP" "étape temporaire"
+          run_change "$FINAL" "restauration du titre final"
+
+      - name: Verify stored content and public page
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CODE="$(curl -sS -o snapshot-final.json -w '%{http_code}' \
+            -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" \
+            -H "Accept: application/json" \
+            "$WP_URL$RTP1_API/snapshot/11")"
+          [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || exit 1
+
+          python - <<'PY'
+import json,sys
+snap=json.load(open("snapshot-final.json",encoding="utf-8"))
+final=json.load(open("partners-cache-refresh.json",encoding="utf-8"))["final_title"]
+found=[]
+def walk(nodes):
+    for n in nodes or []:
+        if n.get("id")=="412d480":
+            found.append((n.get("settings") or {}).get("title"))
+        walk(n.get("elements") or [])
+walk(snap.get("data") or [])
+print("Final stored heading:",found)
+if found!=[final]:
+    sys.exit(2)
+PY
+
+          URL="$WP_URL/partenaires/?rtp1_live_verify=$GITHUB_RUN_ID"
+          OK=0
+          for ATTEMPT in 1 2 3 4 5; do
+            CODE="$(curl -sS -L -o public.html -w '%{http_code}' \
+              -H "Cache-Control: no-cache, no-store, must-revalidate" \
+              "$URL")"
+            if [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] && \
+               grep -Fq "Votre soutien a un impact concret" public.html && \
+               grep -Fq "À quoi servent les contributions" public.html && \
+               grep -Fq "Un partenariat qui doit aussi vous être utile" public.html; then
+              OK=1
+              break
+            fi
+            sleep 4
+          done
+          if [ "$OK" != "1" ]; then
+            echo "::error::Public page still does not expose the approved content."
+            exit 1
+          fi
+          echo "Public Partenaires page verified."
