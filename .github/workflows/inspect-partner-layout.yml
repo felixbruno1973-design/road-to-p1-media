@@ -17,55 +17,22 @@ jobs:
       WP_USERNAME: roadtop1-media
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect homepage partner CTA and Partenaires image layout
+
+      - name: Inspect homepage and Partenaires
         shell: bash
         env:
           RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
         run: |
           set -euo pipefail
           for ID in 10 11; do
-            curl -sS               -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"               -H "Accept: application/json"               "$WP_URL/wp-json/wp/v2/pages/$ID?context=edit" > "page-$ID.json"
+            curl -sS -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"               -H "Accept: application/json"               "$WP_URL/wp-json/wp/v2/pages/$ID?context=edit" > "page-$ID.json"
           done
 
-          python - <<'PY'
-import json,re
+          jq -r '.meta._elementor_data' page-10.json > home-elementor.json
+          jq -r '.meta._elementor_data' page-11.json > partners-elementor.json
 
-def load(id):
-    p=json.load(open(f"page-{id}.json",encoding="utf-8"))
-    meta=(p.get("meta") or {}).get("_elementor_data")
-    return p, json.loads(meta) if isinstance(meta,str) else meta
+          echo "=== HOME PARTNER MATCHES ==="
+          jq -c '.. | objects | select((.settings? // {} | tostring | ascii_downcase | contains("partenaire")) or (.settings? // {} | tostring | ascii_downcase | contains("partner"))) | {id,elType,widgetType,settings}' home-elementor.json
 
-def clean(v, limit=500):
-    if isinstance(v,dict): return {k:clean(x,limit) for k,x in v.items()}
-    if isinstance(v,list): return [clean(x,limit) for x in v[:15]]
-    if isinstance(v,str):
-        return re.sub(r"s+"," ",v).strip()[:limit]
-    return v
-
-p10,d10=load(10)
-print("=== HOME PARTNER MATCHES ===")
-def walk_home(nodes,path=""):
-    for n in nodes or []:
-        st=n.get("settings") or {}
-        blob=json.dumps(st,ensure_ascii=False).lower()
-        if "partenaire" in blob or "partner" in blob:
-            print(json.dumps({
-              "id":n.get("id"),"elType":n.get("elType"),"widgetType":n.get("widgetType"),
-              "settings":clean(st,1200)
-            },ensure_ascii=False))
-        walk_home(n.get("elements") or [],path+"/"+str(n.get("id")))
-walk_home(d10)
-
-p11,d11=load(11)
-print("=== PARTENAIRES IMAGE/CONTAINER NODES ===")
-wanted={"8735702","49caa96","5eb18ed","2394503","3458751","da8e127","8f33e70","bb25799","2f26c83","85e81e3","69af66f","7bc94b4"}
-def walk_partners(nodes):
-    for n in nodes or []:
-        if n.get("id") in wanted:
-            print(json.dumps({
-              "id":n.get("id"),"elType":n.get("elType"),"widgetType":n.get("widgetType"),
-              "settings":clean(n.get("settings") or {},1800)
-            },ensure_ascii=False))
-        walk_partners(n.get("elements") or [])
-walk_partners(d11)
-PY
+          echo "=== PARTENAIRES IMAGE AND CONTAINER NODES ==="
+          jq -c '.. | objects | select(.id? as $id | ["8735702","49caa96","5eb18ed","2394503","3458751","da8e127","8f33e70","bb25799","2f26c83","85e81e3","69af66f","7bc94b4"] | index($id)) | {id,elType,widgetType,settings}' partners-elementor.json
