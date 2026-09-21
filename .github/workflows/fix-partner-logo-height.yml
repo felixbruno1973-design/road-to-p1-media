@@ -1,0 +1,129 @@
+name: ROAD TO P1 Fix Partner Logo Height FR EN
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - fix-partner-logo-height.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: road-to-p1-fix-partner-logo-height
+  cancel-in-progress: false
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    env:
+      WP_URL: https://road-to-p1.com
+      WP_USERNAME: roadtop1-media
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate command
+        run: |
+          set -euo pipefail
+          jq -e '.confirm == true and .widget_id == "5eb18ed"' fix-partner-logo-height.json >/dev/null
+
+      - name: Fetch pages
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for ID in 11 10517; do
+            CODE="$(curl -sS -o "before-$ID.json" -w '%{http_code}'               -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"               -H "Accept: application/json"               "$WP_URL/wp-json/wp/v2/pages/$ID?context=edit")"
+            echo "Read $ID -> HTTP $CODE"
+            [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || exit 1
+          done
+
+      - name: Backup both pages
+        uses: actions/upload-artifact@v4
+        with:
+          name: partners-fr-en-before-logo-height-fix-${{ github.run_id }}
+          path: |
+            before-11.json
+            before-10517.json
+          retention-days: 30
+
+      - name: Build corrected payloads
+        shell: bash
+        run: |
+          set -euo pipefail
+          for ID in 11 10517; do
+            PAGE_ID="$ID" python - <<'PY'
+          import json,os
+          pid=os.environ["PAGE_ID"]
+          p=json.load(open(f"before-{pid}.json",encoding="utf-8"))
+          raw=(p.get("meta") or {}).get("_elementor_data")
+          if not isinstance(raw,str):
+              raise SystemExit("Safety stop: Elementor data unavailable")
+          data=json.loads(raw)
+          found=[]
+          def walk(nodes):
+              for n in nodes or []:
+                  if n.get("id")=="5eb18ed":
+                      found.append(n)
+                  walk(n.get("elements") or [])
+          walk(data)
+          if len(found)!=1:
+              raise SystemExit(f"Safety stop: expected one Alfano card, found {len(found)}")
+          s=found[0].setdefault("settings",{})
+          old=s.get("image_height")
+          print(f"Page {pid} old image_height:",old)
+          if not (isinstance(old,dict) and old.get("unit")=="px" and old.get("size")==3):
+              raise SystemExit("Safety stop: unexpected image_height; refusing to change")
+          s.pop("image_height",None)
+          payload={"meta":{"_elementor_data":json.dumps(data,ensure_ascii=False,separators=(",",":"))}}
+          json.dump(payload,open(f"update-{pid}.json","w",encoding="utf-8"),ensure_ascii=False,separators=(",",":"))
+          PY
+          done
+
+      - name: Publish both pages
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for ID in 11 10517; do
+            OK=0
+            for METHOD in PUT PATCH POST; do
+              for ATTEMPT in 1 2 3 4; do
+                CODE="$(curl -sS -o "response-$ID.json" -w '%{http_code}'                   -X "$METHOD"                   -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"                   -H "Content-Type: application/json"                   --data-binary @"update-$ID.json"                   "$WP_URL/wp-json/wp/v2/pages/$ID")"
+                echo "Page $ID $METHOD attempt $ATTEMPT -> HTTP $CODE"
+                if [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ]; then OK=1; break 2; fi
+                sleep 4
+              done
+            done
+            [ "$OK" = "1" ] || exit 1
+          done
+
+      - name: Verify fix
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for ID in 11 10517; do
+            curl -sS -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" -H "Accept: application/json" "$WP_URL/wp-json/wp/v2/pages/$ID?context=edit" > "after-$ID.json"
+            PAGE_ID="$ID" python - <<'PY'
+          import json,os
+          pid=os.environ["PAGE_ID"]
+          p=json.load(open(f"after-{pid}.json",encoding="utf-8"))
+          d=json.loads((p.get("meta") or {}).get("_elementor_data"))
+          found=[]
+          def walk(nodes):
+              for n in nodes or []:
+                  if n.get("id")=="5eb18ed":
+                      found.append(n)
+                  walk(n.get("elements") or [])
+          walk(d)
+          if len(found)!=1: raise SystemExit("Verification failed: card missing")
+          s=found[0].get("settings") or {}
+          ok="image_height" not in s and s.get("image_size_mobile",{}).get("size")==68
+          print(f"Page {pid} logo aspect-ratio fix verified: {ok}")
+          if not ok: raise SystemExit("Verification failed")
+          PY
+          done
