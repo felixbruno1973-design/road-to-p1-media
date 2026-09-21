@@ -1,0 +1,41 @@
+name: ROAD TO P1 Verify English Home Live
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - verify-en-home-live.json
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check public rendered English homepage
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://road-to-p1.com/en/home/?rtp1_verify=$(date +%s)"
+          CODE="$(curl -L -sS -o page.html -w '%{http_code}' -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "$URL")"
+          echo "Public GET -> HTTP $CODE"
+          [ "$CODE" -ge 200 ] && [ "$CODE" -lt 400 ] || exit 1
+          python - <<'PY'
+          from pathlib import Path
+          s=Path("page.html").read_text(encoding="utf-8",errors="ignore")
+          checks={
+            "new_hero":"ROAD TO P1 · The association" in s,
+            "calendar_lara_2026":"calendar-lara.png" in s,
+            "calendar_aaron_2026":"calendar-aaron.png" in s,
+            "no_2025_calendar":"Calandrier-UFOLEP-KART-2025.png" not in s,
+            "no_legacy_rankings":"jsprt_achv_season/lara-2025" not in s and "jsprt_achv_season/aaron-2025" not in s,
+            "english_news":"https://road-to-p1.com/en/news/" in s,
+            "english_partners":"https://road-to-p1.com/en/our-partners/" in s,
+            "aaron_age_8":"Aaron, 8 years old" in s,
+          }
+          for k,v in checks.items(): print(f"{k}: {v}")
+          if not all(checks.values()):
+              raise SystemExit("Public English homepage has not fully refreshed yet.")
+          PY
