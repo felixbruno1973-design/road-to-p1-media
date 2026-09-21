@@ -1,10 +1,10 @@
 {
-  "enabled": true,
-  "command_id": "fix-aprendre-apprendre-20260921-r2",
+  "enabled": false,
+  "command_id": "idle-20260921",
   "mode": "exact_text_replace",
-  "page_path": "/road-to-p1/",
-  "source_text": "aprendre",
-  "replacement_text": "apprendre",
-  "expected_occurrences": 2,
-  "confirm": true
+  "page_path": "/",
+  "source_text": "idle",
+  "replacement_text": "idle-done",
+  "expected_occurrences": 1,
+  "confirm": false
 }
