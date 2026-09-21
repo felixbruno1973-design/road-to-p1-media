@@ -1,6 +1,6 @@
 {
   "enabled": true,
-  "command_id": "fix-charing-sharing-20260921",
+  "command_id": "fix-charing-sharing-20260921-diag2",
   "mode": "exact_text_replace",
   "page_path": "/en/home/",
   "source_text": "charing",
