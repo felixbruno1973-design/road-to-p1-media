@@ -1,4 +1,4 @@
-# ROAD TO P1 Media — V2.2
+# ROAD TO P1 Media — V2.3
 
 ROAD TO P1 Media est organisé autour de quatre modules complémentaires :
 
@@ -7,7 +7,11 @@ ROAD TO P1 Media est organisé autour de quatre modules complémentaires :
 - **Media Training** : bases de la communication, simulations médias, Culture automobile niveau expert et entretien vocal « Improve Your English ».
 - **Library** : bibliothèque centrale locale de photos, vidéos, logos et documents, stockés directement sur l’appareil via IndexedDB.
 
-## Media Training V2.2 — Culture automobile expert
+## Studio V2.3
+
+La V2.3 consolide l'atelier de montage vidéo local : choix de transition directement visible, prévisualisation des séquences, réordonnancement par glisser-déposer, suppression de séquences, durée réglable par plan, durée globale recalculée et annulation du rendu en cours. Les médias restent stockés localement dans la Library.
+
+## Media Training — Culture automobile expert
 
 Le quiz léger de V2.1 devient un véritable parcours d'apprentissage :
 
