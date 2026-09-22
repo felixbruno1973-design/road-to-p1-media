@@ -5,7 +5,7 @@ ROAD TO P1 Media est organisé autour de quatre modules complémentaires :
 - **Studio** : création de posts, stories, reels, scripts vidéo, annonces avant-course et contenus partenaires à partir des ressources disponibles.
 - **Reports** : rapports de course, bilans partenaires, bilans mensuels ou de saison et communiqués structurés.
 - **Media Training** : bases de la communication, simulations médias, Culture automobile niveau expert et entretien vocal « Improve Your English ».
-- **Library** : bibliothèque centrale de photos, vidéos, logos et documents, utilisable en stockage local ou via une API Cloudflare R2 + D1.
+- **Library** : bibliothèque centrale locale de photos, vidéos, logos et documents, stockés directement sur l’appareil via IndexedDB.
 
 ## Media Training V2.2 — Culture automobile expert
 
@@ -17,24 +17,22 @@ Le quiz léger de V2.1 devient un véritable parcours d'apprentissage :
 - Suivi de la maîtrise par thème et mémorisation des notions déjà acquises.
 - Les données V2.1 restent compatibles.
 
-## Library V2.2 — multi-appareils
+## Library V2.2 — stockage local
 
-La Library conserve le mode IndexedDB local par défaut. La V2.2 ajoute un client cloud optionnel :
+La Library fonctionne désormais exclusivement en stockage local sur l’appareil utilisé.
 
-- **Cloudflare R2** pour les fichiers (photos, vidéos, logos, documents).
-- **Cloudflare D1** pour le catalogue et les métadonnées.
-- Upload multipart par morceaux pour mieux supporter les vidéos volumineuses.
-- Aucun secret R2 n'est intégré au code public de l'application.
-- Si le cloud est indisponible, l'application retombe sur la Library locale.
+Fonctions disponibles :
 
-Le backend prêt à déployer se trouve dans `cloud/` :
+- classement par dossiers / événements ;
+- recherche par nom, pilote, événement, tag ou catégorie ;
+- tri par date, nom, type, taille ou pilote ;
+- sélection individuelle par case à cocher ;
+- bouton **Tout sélectionner / Tout désélectionner** ;
+- suppression groupée des médias sélectionnés ;
+- aperçu des images, vidéos et PDF ;
+- détection améliorée du type des anciens fichiers lorsque le navigateur n’a pas enregistré correctement leur type MIME.
 
-- `cloud/worker.js` : API Worker sécurisée.
-- `cloud/schema.sql` : schéma D1.
-- `cloud/wrangler.toml.example` : exemple de configuration R2/D1.
-- `cloud/README.md` : procédure de mise en service.
-
-> Tant que le Worker Cloudflare n'est pas déployé et configuré dans l'interface, la Library continue de fonctionner en mode local.
+Les fichiers sont enregistrés directement dans IndexedDB sur l’appareil utilisé.
 
 ## Media Training
 
