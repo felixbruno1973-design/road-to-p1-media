@@ -129,3 +129,9 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .storyboard-drag-hint{margin-top:4px!important;color:#69777f!important;font-style:italic;white-space:normal!important}
 @media(max-width:900px){.studio-transition-presets{grid-template-columns:1fr 1fr}}
 @media(max-width:520px){.studio-transition-presets{grid-template-columns:1fr}}
+
+
+/* Studio V2.2 — retrait de séquence */
+.storyboard-remove{position:absolute;right:8px;top:8px;border:1px solid rgba(255,130,136,.7);background:rgba(38,9,12,.88);color:#ffd9db;border-radius:999px;padding:6px 9px;font-size:9px;font-weight:850;backdrop-filter:blur(4px);z-index:3}
+.storyboard-remove:hover{background:#8f272e;border-color:#ef858a;color:#fff}
+.storyboard-card.playing .storyboard-remove{opacity:.9}
