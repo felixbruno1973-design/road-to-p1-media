@@ -74,3 +74,17 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .storyboard-info small{font-size:8px;color:#7f8b94;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media(max-width:720px){.studio-storyboard{grid-template-columns:1fr 1fr}.storyboard-media{height:100px}}
 @media(max-width:460px){.studio-storyboard{grid-template-columns:1fr}}
+
+
+/* Studio V2.2 — rendu vidéo local */
+.studio-render-panel{margin-top:14px}
+.studio-render-body{display:grid;gap:12px}
+.studio-render-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.studio-render-actions a{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+.studio-render-progress{display:grid;gap:6px}
+.studio-render-progress>div{height:9px;border:1px solid #34414a;border-radius:999px;background:#0b1116;overflow:hidden}
+.studio-render-progress>div span{display:block;height:100%;width:0;background:linear-gradient(90deg,#9b3c42,#e4323b);transition:width .18s}
+.studio-render-progress small{font-size:9px;color:#89959d}
+.studio-render-preview{display:block;width:min(100%,760px);max-height:620px;margin:2px auto 0;border:1px solid #34414a;border-radius:13px;background:#050709}
+[hidden]{display:none!important}
+@media(max-width:720px){.studio-render-actions{align-items:stretch}.studio-render-actions .btn{flex:1 1 100%}.studio-render-preview{max-height:500px}}
