@@ -47,3 +47,13 @@
 .library-preview #libPreviewHint{color:#e8cfa6;margin:0}
 button:disabled{opacity:.45;cursor:not-allowed}
 @media(max-width:700px){.library-item{grid-template-columns:24px 32px minmax(0,1fr)}.library-item .mini-actions{grid-column:2/-1;justify-content:flex-start}.library-selection .btn{flex:1}.library-tools select{width:100%}}
+
+
+/* Studio V2.2 — atelier de production */
+.studio-production-intro{padding:20px 22px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px;align-items:center;margin-bottom:14px}
+.studio-production-intro h2{margin:5px 0 7px;font-size:24px}
+.studio-production-intro p{margin:0;color:#aeb8be;max-width:760px}
+.studio-production-types{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.studio-production-types span{border:1px solid #34414a;border-radius:999px;background:#0d1419;color:#d6dde1;padding:7px 10px;font-size:9px;font-weight:850;white-space:nowrap}
+.studio-hint{align-self:end;border:1px dashed #46545d;border-radius:9px;background:#0d1419;color:#aab5bb;padding:9px 10px;font-size:9px;line-height:1.45}
+@media(max-width:720px){.studio-production-intro{grid-template-columns:1fr;padding:16px}.studio-production-types{justify-content:flex-start}}

@@ -47,7 +47,7 @@ async function loadOfficialLogo(){
 
 const titles={
  home:['Media Center','Créer, structurer, entraîner et conserver.'],
- studio:['Studio','Créer les contenus ROAD TO P1 à partir des ressources de Library.'],
+ studio:['Studio','Concevoir articles, montages photo et montages vidéo à partir des ressources de Library.'],
  reports:['Reports','Produire les rapports de course, bilans et contenus structurés.'],
  training:['Media Training','Préparer Lara et Aaron aux interviews françaises et internationales.'],
  library:['Library','Centraliser les photos, vidéos, logos et documents.']
@@ -64,41 +64,131 @@ function renderHome(){
  const a=$('recentActivity');a.innerHTML=D.activity.length?D.activity.slice(0,8).map(x=>`<div class="activity-item"><b>${esc(x.text)}</b><span>${fd(x.at)}</span></div>`).join(''):'<div class="empty">Aucune activité enregistrée pour le moment.</div>';
 }
 
-function studioTemplate(pilot,type,event,objective,tone,assets){
- const e=event||'ce rendez-vous',o=objective?`\n\n${objective.trim()}`:'',media=assets.length?`\n\nMédias retenus : ${assets.map(x=>x.name).join(' • ')}`:'';
- const thanks='\n\nMerci à toutes les personnes et partenaires qui accompagnent ROAD TO P1.';
- if(type==='Story')return `${pilot} • ${e}\n\n🏁 En piste.\n📈 Une nouvelle étape de progression.\n🔥 Objectif : continuer à avancer.${o}${thanks}${media}`;
- if(type==='Reel / vidéo courte')return `SCRIPT REEL — ${pilot} / ${e}\n\n0–3 s : ouverture forte / action piste\n3–8 s : paddock + préparation\n8–14 s : séquence course / dépassement / rythme\n14–19 s : résultat ou enseignement principal\n19–24 s : ${pilot} face caméra\n24–28 s : partenaires + logo ROAD TO P1\n\nTexte écran : « Chaque tour construit la suite. »${o}${media}`;
- if(type==='Contenu partenaire')return `PARTENAIRE • ${pilot} • ${e}\n\nROAD TO P1 poursuit son projet d’accompagnement vers le haut niveau en sport automobile. ${pilot} franchit une nouvelle étape à ${e}.${o}\n\nCette progression est rendue possible par l’engagement de nos partenaires, présents à nos côtés dans la durée.${thanks}${media}`;
- if(type==='Annonce avant-course')return `🏁 PROCHAIN RENDEZ-VOUS — ${e}\n\n${pilot} retrouve la piste avec ROAD TO P1 pour une nouvelle étape de la saison.${o}\n\nObjectif : travailler, progresser et transformer chaque tour en expérience.${thanks}${media}`;
- const opener=tone==='Humain'?`Derrière chaque tour, il y a du travail, des doutes, des progrès et beaucoup d’envie.`:tone==='Énergique'?`🔥 Nouveau week-end, nouveau défi, même ambition !`:`🏁 ${pilot} poursuit sa progression avec ROAD TO P1 à ${e}.`;
- return `${opener}\n\n${pilot} franchit une nouvelle étape à ${e}. Le week-end permet de continuer à apprendre, progresser et construire la suite.${o}${thanks}\n\n#RoadToP1 #Karting #Motorsport #YoungDrivers${media}`;
+
+function normalizeStudioType(type){
+ if(['Article','Montage vidéo','Montage photo'].includes(type))return type;
+ return /reel|vidéo/i.test(type||'')?'Montage vidéo':'Article';
 }
-function selectedAssets(){return libraryCache.filter(x=>studioSelected.has(x.id))}
-function renderStudioAssets(){
- const q=($('stAssetSearch')?.value||'').toLowerCase();
- const list=libraryCache.filter(x=>!q||[x.name,x.pilot,x.event,x.tags,x.category].join(' ').toLowerCase().includes(q));
- $('stAssetCount').textContent=`${studioSelected.size} sélectionné${studioSelected.size>1?'s':''}`;
- $('stAssetList').innerHTML=list.length?list.map(x=>`<label class="asset-check"><input type="checkbox" data-st-asset="${x.id}" ${studioSelected.has(x.id)?'checked':''}><span><b>${esc(x.name)}</b><small>${esc(x.category)} • ${esc(x.pilot||'—')} • ${sizeText(x.size||0)}</small></span></label>`).join(''):'<div class="empty">Library est vide. Ajoutez d’abord des médias.</div>';
- document.querySelectorAll('[data-st-asset]').forEach(cb=>cb.onchange=()=>{cb.checked?studioSelected.add(cb.dataset.stAsset):studioSelected.delete(cb.dataset.stAsset);$('stAssetCount').textContent=`${studioSelected.size} sélectionné${studioSelected.size>1?'s':''}`});
+function studioChannelProfile(channel,production){
+ if(production==='Montage vidéo'){
+  if(channel==='Instagram')return 'Reel vertical 9:16 • rythme court • 20 à 45 s';
+  if(channel==='Facebook')return 'Vidéo sociale 4:5 ou 16:9 • 30 à 60 s';
+  return 'Vidéo web 16:9 • narration plus posée • 45 à 90 s';
+ }
+ if(production==='Montage photo'){
+  if(channel==='Instagram')return 'Carrousel 4:5 • couverture forte • 5 à 10 visuels';
+  if(channel==='Facebook')return 'Publication ou album • 4 à 8 visuels';
+  return 'Galerie ou illustration d’article • formats paysage et portrait';
+ }
+ return channel==='Site internet'?'Article web structuré • titre, chapô, intertitres et médias':'Publication éditoriale adaptée au fil d’actualité';
 }
-function renderStudio(){
- const q=($('stSearch')?.value||'').toLowerCase(),L=D.studio.filter(x=>!q||[x.pilot,x.type,x.event,x.status,x.objective].join(' ').toLowerCase().includes(q));
- $('stCount').textContent=`${L.length} création${L.length>1?'s':''}`;
- $('stList').innerHTML=L.length?L.map(x=>`<div class="list-item"><div><h4>${esc(x.event||x.type)}</h4><div class="list-meta">${esc(x.pilot)} • ${esc(x.type)} • ${fd(x.updated||x.created)}</div><p>${esc((x.text||'').slice(0,160))}${(x.text||'').length>160?'…':''}</p></div><div class="mini-actions"><span class="pill ${x.status==='Publié'?'done':x.status==='Prêt'?'valid':''}">${esc(x.status)}</span><button data-st-open="${x.id}">Ouvrir</button><button class="danger" data-st-del="${x.id}">Supprimer</button></div></div>`).join(''):'<div class="empty">Aucune création Studio.</div>';
- document.querySelectorAll('[data-st-open]').forEach(b=>b.onclick=()=>openStudioDraft(b.dataset.stOpen));
- document.querySelectorAll('[data-st-del]').forEach(b=>b.onclick=()=>delStudioDraft(b.dataset.stDel));
+function studioTemplate(pilot,type,event,objective,tone,assets,channel){
+ const production=normalizeStudioType(type),e=event||'Sujet à préciser',brief=(objective||'').trim()||'Aucun élément ajouté pour le moment.';
+ channel=channel||'Instagram';
+ const profile=studioChannelProfile(channel,production);
+ const sources=assets.length?assets.map(function(x,i){return (i+1)+'. '+x.name+' — '+x.category}).join('\n'):'Aucun média sélectionné.';
+ if(production==='Montage vidéo'){
+  const roles=['accroche / action forte','contexte / paddock','séquence piste','moment clé','pilote / émotion','partenaires / conclusion'];
+  const sequence=assets.length?assets.map(function(x,i){const a=i*4,b=a+4;return String(a).padStart(2,'0')+'–'+String(b).padStart(2,'0')+' s • '+x.name+' • '+roles[i%roles.length]}).join('\n'):'Sélectionner dans Library les vidéos, photos ou logos à intégrer.';
+  return [
+   'PROPOSITION DE MONTAGE VIDÉO — '+channel.toUpperCase(),'',
+   'Pilote : '+pilot,'Sujet : '+e,'Format conseillé : '+profile,'Ton : '+tone,'',
+   'OBJECTIF / ÉLÉMENTS À RACONTER',brief,'',
+   'MÉDIAS SÉLECTIONNÉS',sources,'',
+   'PROPOSITION DE MONTAGE',sequence,'',
+   'HABILLAGE',
+   '• Ouverture : logo ROAD TO P1 + titre court',
+   '• Textes écran : résultat, lieu ou message clé uniquement',
+   '• Rythme : coupes franches sur l’action, respiration sur les moments humains',
+   '• Fin : pilote / prochain rendez-vous / partenaires','',
+   'LÉGENDE PROPOSÉE','🏁 '+pilot+' — '+e+'. '+brief,'','#RoadToP1 #Karting #Motorsport'
+  ].join('\n');
+ }
+ if(production==='Montage photo'){
+  const roles=['Couverture','Action piste','Détail / préparation','Pilote / émotion','Équipe / coulisses','Partenaires'];
+  const sequence=assets.length?assets.map(function(x,i){return (i+1)+'. '+x.name+' — '+roles[i%roles.length]}).join('\n'):'Sélectionner dans Library les photos à utiliser.';
+  return [
+   'PROPOSITION DE MONTAGE PHOTO — '+channel.toUpperCase(),'',
+   'Pilote : '+pilot,'Sujet : '+e,'Format conseillé : '+profile,'Ton : '+tone,'',
+   'MESSAGE À FAIRE PASSER',brief,'',
+   'SÉLECTION',sources,'',
+   'ORDRE PROPOSÉ',sequence,'',
+   'TRAITEMENT',
+   '• Première image : visuel le plus fort, lisible sans texte long',
+   '• Cohérence : même ambiance et même logique de recadrage',
+   '• Dernière image : conclusion, partenaires ou prochain rendez-vous','',
+   'LÉGENDE PROPOSÉE',pilot+' • '+e,brief,'','#RoadToP1 #Karting #Motorsport'
+  ].join('\n');
+ }
+ const title=tone==='Humain'?pilot+' : ce que '+e+' raconte au-delà du résultat':pilot+' — '+e+' : une nouvelle étape avec ROAD TO P1';
+ return [
+  'PROPOSITION D’ARTICLE — '+channel.toUpperCase(),'',
+  'Pilote : '+pilot,'Sujet : '+e,'Format conseillé : '+profile,'Ton : '+tone,'',
+  'ÉLÉMENTS FOURNIS',brief,'',
+  'SOURCES / MÉDIAS À EXPLOITER',sources,'',
+  'TITRE PROPOSÉ',title,'',
+  'ANGLE ÉDITORIAL',
+  'Raconter le fait principal, expliquer ce qu’il signifie dans la progression de '+pilot+', puis ouvrir sur la suite du programme ROAD TO P1.','',
+  'STRUCTURE',
+  '1. Accroche : le fait ou l’image forte.',
+  '2. Contexte : course, séance, projet ou actualité.',
+  '3. Développement : intégrer les faits fournis, résultats et apprentissages.',
+  '4. Dimension humaine : travail, équipe, progression et partenaires.',
+  '5. Conclusion : prochaine étape et objectif.','',
+  'BASE DE RÉDACTION',
+  pilot+' poursuit son parcours avec ROAD TO P1 à l’occasion de '+e+'. '+brief,'',
+  'Cette séquence doit être replacée dans une logique de progression : ce qui a été réalisé, ce qui a été appris et ce qui sera travaillé lors de la prochaine étape.','',
+  'Les médias sélectionnés peuvent servir d’illustrations, de sources factuelles ou de support à une citation/légende.','',
+  'CONCLUSION PROPOSÉE',
+  'La suite se construit désormais autour du prochain rendez-vous, avec la même ambition : apprendre, progresser et transformer chaque expérience en étape vers le haut niveau.'
+ ].join('\n');
+}
+function selectedAssets(){return libraryCache.filter(function(x){return studioSelected.has(x.id)})}
+function updateStudioProductionUI(){
+ const production=normalizeStudioType($('stType')&&$('stType').value||'Article');
+ if($('stType'))$('stType').value=production;
+ const article=production==='Article',video=production==='Montage vidéo';
+ if($('stProductionHint'))$('stProductionHint').textContent=article?'Ajoutez les faits, messages, résultats ou idées qui doivent apparaître dans l’article.':video?'Sélectionnez les vidéos, photos et logos qui serviront à construire la proposition de montage.':'Sélectionnez les photos et logos à organiser dans le montage ou carrousel.';
+ if($('stObjectiveLabel'))$('stObjectiveLabel').textContent=article?'Éléments à intégrer / brief':'Message, rythme et éléments à faire ressortir';
+ if($('stOutputLabel'))$('stOutputLabel').textContent=article?'Proposition d’article':video?'Proposition de montage vidéo':'Proposition de montage photo';
+ if($('stAssetHint'))$('stAssetHint').textContent=article?'Pour un article, vous pouvez sélectionner photos, vidéos, documents ou logos comme éléments de référence.':video?'Studio affiche les vidéos, photos et logos disponibles pour construire le montage.':'Studio affiche les photos et logos disponibles pour construire la sélection.';
  renderStudioAssets();
 }
-function openStudioDraft(id){
- const x=D.studio.find(x=>x.id===id);if(!x)return;
- $('stPilot').value=x.pilot;$('stType').value=x.type;$('stEvent').value=x.event;$('stStatus').value=x.status;$('stTone').value=x.tone||'Sportif';$('stObjective').value=x.objective||'';$('stText').value=x.text||'';
- studioSelected=new Set(x.mediaIds||[]);$('stSave').dataset.edit=id;renderStudioAssets();toast('Création chargée.');window.scrollTo({top:0,behavior:'smooth'});
+function renderStudioAssets(){
+ const q=($('stAssetSearch')&&$('stAssetSearch').value||'').toLowerCase();
+ const production=normalizeStudioType($('stType')&&$('stType').value||'Article');
+ const list=libraryCache.filter(function(x){
+  const compatible=production==='Montage vidéo'?['Vidéo','Photo','Logo'].includes(x.category):production==='Montage photo'?['Photo','Logo'].includes(x.category):true;
+  return compatible&&(!q||[x.name,x.pilot,x.event,x.tags,x.category].join(' ').toLowerCase().includes(q));
+ });
+ $('stAssetCount').textContent=studioSelected.size+' sélectionné'+(studioSelected.size>1?'s':'');
+ $('stAssetList').innerHTML=list.length?list.map(function(x){
+  return '<label class="asset-check"><input type="checkbox" data-st-asset="'+x.id+'" '+(studioSelected.has(x.id)?'checked':'')+'><span><b>'+esc(x.name)+'</b><small>'+esc(x.category)+' • '+esc(x.pilot||'—')+' • '+sizeText(x.size||0)+'</small></span></label>';
+ }).join(''):'<div class="empty">Aucun média compatible dans Library.</div>';
+ document.querySelectorAll('[data-st-asset]').forEach(function(cb){cb.onchange=function(){cb.checked?studioSelected.add(cb.dataset.stAsset):studioSelected.delete(cb.dataset.stAsset);$('stAssetCount').textContent=studioSelected.size+' sélectionné'+(studioSelected.size>1?'s':'')}});
 }
-function delStudioDraft(id){if(!confirm('Supprimer cette création Studio ?'))return;D.studio=D.studio.filter(x=>x.id!==id);log('Création Studio supprimée');save();renderStudio()}
+function renderStudio(){
+ const q=($('stSearch')&&$('stSearch').value||'').toLowerCase();
+ const L=D.studio.filter(function(x){return !q||[x.pilot,x.type,x.channel,x.event,x.status,x.objective].join(' ').toLowerCase().includes(q)});
+ $('stCount').textContent=L.length+' production'+(L.length>1?'s':'');
+ $('stList').innerHTML=L.length?L.map(function(x){
+  return '<div class="list-item"><div><h4>'+esc(x.event||x.type)+'</h4><div class="list-meta">'+esc(x.pilot)+' • '+esc(normalizeStudioType(x.type))+' • '+esc(x.channel||'Instagram')+' • '+fd(x.updated||x.created)+'</div><p>'+esc((x.text||'').slice(0,160))+((x.text||'').length>160?'…':'')+'</p></div><div class="mini-actions"><span class="pill '+(x.status==='Publié'?'done':x.status==='Prêt'?'valid':'')+'">'+esc(x.status)+'</span><button data-st-open="'+x.id+'">Ouvrir</button><button class="danger" data-st-del="'+x.id+'">Supprimer</button></div></div>';
+ }).join(''):'<div class="empty">Aucune production Studio.</div>';
+ document.querySelectorAll('[data-st-open]').forEach(function(b){b.onclick=function(){openStudioDraft(b.dataset.stOpen)}});
+ document.querySelectorAll('[data-st-del]').forEach(function(b){b.onclick=function(){delStudioDraft(b.dataset.stDel)}});
+ updateStudioProductionUI();
+}
+function openStudioDraft(id){
+ const x=D.studio.find(function(x){return x.id===id});if(!x)return;
+ $('stPilot').value=x.pilot;$('stType').value=normalizeStudioType(x.type);$('stChannel').value=x.channel||(/facebook/i.test(x.type||'')?'Facebook':'Instagram');$('stEvent').value=x.event;$('stStatus').value=x.status;$('stTone').value=x.tone||'Sportif';$('stObjective').value=x.objective||'';$('stText').value=x.text||'';
+ studioSelected=new Set(x.mediaIds||[]);$('stSave').dataset.edit=id;updateStudioProductionUI();toast('Production chargée.');window.scrollTo({top:0,behavior:'smooth'});
+}
+function delStudioDraft(id){if(!confirm('Supprimer cette production Studio ?'))return;D.studio=D.studio.filter(function(x){return x.id!==id});log('Production Studio supprimée');save();renderStudio()}
 function saveStudio(){
- const id=$('stSave').dataset.edit||uid('s'),old=D.studio.find(x=>x.id===id),x={id,pilot:$('stPilot').value,type:$('stType').value,event:$('stEvent').value.trim(),status:$('stStatus').value,tone:$('stTone').value,objective:$('stObjective').value.trim(),text:$('stText').value,mediaIds:[...studioSelected],created:old?.created||now(),updated:now()};
- const i=D.studio.findIndex(x=>x.id===id);i>=0?D.studio[i]=x:D.studio.unshift(x);log(`${i>=0?'Création Studio mise à jour':'Nouvelle création Studio'} • ${x.pilot} • ${x.type}`);delete $('stSave').dataset.edit;save();renderStudio();toast('Création enregistrée.');
+ const id=$('stSave').dataset.edit||uid('s'),old=D.studio.find(function(x){return x.id===id});
+ const x={id:id,pilot:$('stPilot').value,type:normalizeStudioType($('stType').value),channel:$('stChannel').value,event:$('stEvent').value.trim(),status:$('stStatus').value,tone:$('stTone').value,objective:$('stObjective').value.trim(),text:$('stText').value,mediaIds:[...studioSelected],created:old&&old.created||now(),updated:now()};
+ const i=D.studio.findIndex(function(x){return x.id===id});if(i>=0)D.studio[i]=x;else D.studio.unshift(x);
+ log((i>=0?'Production Studio mise à jour':'Nouvelle production Studio')+' • '+x.pilot+' • '+x.type+' • '+x.channel);delete $('stSave').dataset.edit;save();renderStudio();toast('Production enregistrée.');
 }
 
 function reportTemplate(pilot,type,event,facts){
@@ -437,7 +527,7 @@ async function deleteAssets(ids){
 function bind(){
  document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>openView(b.dataset.view));document.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openView(b.dataset.open));
  document.querySelectorAll('[data-training-tab]').forEach(b=>b.onclick=()=>openTrainingTab(b.dataset.trainingTab));
- $('stGenerate').onclick=()=>{$('stText').value=studioTemplate($('stPilot').value,$('stType').value,$('stEvent').value.trim(),$('stObjective').value.trim(),$('stTone').value,selectedAssets());toast('Proposition générée.')};$('stSave').onclick=saveStudio;$('stSearch').oninput=renderStudio;$('stAssetSearch').oninput=renderStudioAssets;
+ $('stGenerate').onclick=function(){$('stText').value=studioTemplate($('stPilot').value,$('stType').value,$('stEvent').value.trim(),$('stObjective').value.trim(),$('stTone').value,selectedAssets(),$('stChannel').value);toast('Proposition Studio créée.')};$('stSave').onclick=saveStudio;$('stSearch').oninput=renderStudio;$('stAssetSearch').oninput=renderStudioAssets;$('stType').onchange=function(){studioSelected.clear();updateStudioProductionUI()};$('stChannel').onchange=updateStudioProductionUI;
  $('repDate').value=today();$('repGenerate').onclick=()=>{$('repText').value=reportTemplate($('repPilot').value,$('repType').value,$('repEvent').value.trim(),$('repFacts').value.trim());toast('Trame générée.')};$('repSave').onclick=saveReport;$('repSearch').oninput=renderReports;
  $('trStart').onclick=newQuestion;$('trEvaluate').onclick=evaluate;$('trMic').onclick=startMic;$('trStop').onclick=stopMic;
  $('cultureNext').onclick=nextCulture;if($('cultureLevel'))$('cultureLevel').onchange=()=>{D.culture.level=$('cultureLevel').value;cultureIndex=0;save();renderCultureThemes();if(cultureTheme)showCultureQuestion()};$('enStart').onclick=startEnglish;$('enListen').onclick=listenEnglish;$('enAnswer').onclick=answerEnglish;$('enEnd').onclick=endEnglish;
@@ -452,6 +542,6 @@ function bind(){
 
 }
 
-async function init(){load();bind();renderHome();renderStudio();renderReports();renderTraining();loadOfficialLogo();await refreshLibrary()}
+async function init(){load();bind();renderHome();renderStudio();renderReports();renderTraining();loadOfficialLogo();await refreshLibrary();updateStudioProductionUI()}
 init();
 })();

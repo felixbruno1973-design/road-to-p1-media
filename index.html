@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#080b10">
 <title>ROAD TO P1 Media — V2.2</title>
-<link rel="stylesheet" href="style.css?v=221">
+<link rel="stylesheet" href="style.css?v=222">
 </head>
 <body>
 <div class="app">
@@ -42,7 +42,7 @@
         </div>
       </div>
       <div class="module-grid four">
-        <article class="module-card" data-open="studio"><div class="module-icon">✦</div><div class="module-tag">CRÉATION</div><h3>Studio</h3><p>Posts, stories, reels, scripts vidéo et contenus partenaires à partir des médias de Library.</p><button>Ouvrir Studio →</button></article>
+        <article class="module-card" data-open="studio"><div class="module-icon">✦</div><div class="module-tag">PRODUCTION</div><h3>Studio</h3><p>Concevoir un article, un montage photo ou un montage vidéo à partir des éléments et médias sélectionnés dans Library.</p><button>Ouvrir Studio →</button></article>
         <article class="module-card" data-open="reports"><div class="module-icon">◉</div><div class="module-tag">BILANS</div><h3>Reports</h3><p>Rapports de course, bilans partenaires, synthèses de saison et communiqués structurés.</p><button>Ouvrir Reports →</button></article>
         <article class="module-card" data-open="training"><div class="module-icon">🎙</div><div class="module-tag">PILOTES</div><h3>Media Training</h3><p>Interviews FR/EN, entraînement au micro, clarté, structure et aisance.</p><button>Ouvrir Media Training →</button></article>
         <article class="module-card" data-open="library"><div class="module-icon">▦</div><div class="module-tag">RESSOURCES</div><h3>Library</h3><p>Photos, vidéos, logos et documents centralisés, classés et réutilisables.</p><button>Ouvrir Library →</button></article>
@@ -51,29 +51,38 @@
     </section>
 
     <section class="view" id="view-studio">
+      <div class="studio-production-intro panel">
+        <div><span class="kicker">ATELIER DE PRODUCTION</span><h2>Choisir les médias. Construire le contenu. Adapter au canal.</h2><p>Studio prépare une proposition complète à partir des éléments que vous fournissez et des fichiers sélectionnés dans Library.</p></div>
+        <div class="studio-production-types" aria-label="Types de production">
+          <span>📝 Article</span><span>🎬 Montage vidéo</span><span>🖼 Montage photo</span>
+        </div>
+      </div>
       <div class="section-grid studio-grid">
         <div class="panel form-panel">
-          <div class="panel-head"><h3>Nouvelle création</h3><span>Créer un brouillon média</span></div>
+          <div class="panel-head"><h3>Nouvelle production</h3><span>Article, vidéo ou photos</span></div>
           <div class="panel-body form-grid">
             <label>Pilote<select id="stPilot"><option>Lara</option><option>Aaron</option><option>ROAD TO P1</option></select></label>
-            <label>Format<select id="stType"><option>Post Instagram / Facebook</option><option>Story</option><option>Reel / vidéo courte</option><option>Contenu partenaire</option><option>Annonce avant-course</option></select></label>
-            <label class="span2">Événement / course<input id="stEvent" placeholder="Ex. Anneville — Championnat de France"></label>
+            <label>Type de production<select id="stType"><option>Article</option><option>Montage vidéo</option><option>Montage photo</option></select></label>
+            <label>Canal cible<select id="stChannel"><option>Instagram</option><option>Facebook</option><option>Site internet</option></select></label>
             <label>Statut<select id="stStatus"><option>Brouillon</option><option>À valider</option><option>Prêt</option><option>Publié</option></select></label>
+            <label class="span2">Événement / sujet<input id="stEvent" placeholder="Ex. Anneville — Championnat de France"></label>
             <label>Ton<select id="stTone"><option>Sportif</option><option>Humain</option><option>Partenaire</option><option>Institutionnel</option><option>Énergique</option></select></label>
-            <label class="span2">Objectif / message<textarea id="stObjective" placeholder="Résultat, progression, émotion, partenaire à remercier, message à faire passer..."></textarea></label>
-            <div class="actions span2"><button class="btn" id="stGenerate">Générer une proposition</button><button class="btn primary" id="stSave">Enregistrer</button></div>
-            <label class="span2">Texte / script<textarea class="large" id="stText" placeholder="Le contenu proposé apparaîtra ici."></textarea></label>
+            <div id="stProductionHint" class="studio-hint">Ajoutez les faits, messages, résultats ou idées qui doivent apparaître dans l’article.</div>
+            <label class="span2"><span id="stObjectiveLabel">Éléments à intégrer / brief</span><textarea id="stObjective" placeholder="Résultats, faits marquants, citations, message principal, partenaires, informations à intégrer..."></textarea></label>
+            <div class="actions span2"><button class="btn" id="stGenerate">Créer la proposition Studio</button><button class="btn primary" id="stSave">Enregistrer</button></div>
+            <label class="span2"><span id="stOutputLabel">Proposition Studio</span><textarea class="large" id="stText" placeholder="La proposition de production apparaîtra ici."></textarea></label>
           </div>
         </div>
         <div class="panel asset-picker-panel">
-          <div class="panel-head"><h3>Médias Library</h3><span id="stAssetCount">0 sélectionné</span></div>
+          <div class="panel-head"><h3>Sources Library</h3><span id="stAssetCount">0 sélectionné</span></div>
           <div class="panel-body picker-body">
-            <input class="search" id="stAssetSearch" placeholder="Rechercher dans Library...">
+            <input class="search" id="stAssetSearch" placeholder="Rechercher les médias à utiliser...">
+            <p class="file-note" id="stAssetHint">Pour un article, vous pouvez sélectionner photos, vidéos, documents ou logos comme éléments de référence.</p>
             <div id="stAssetList" class="asset-picker-list"></div>
           </div>
         </div>
       </div>
-      <div class="panel history-panel"><div class="panel-head"><h3>Créations Studio</h3><span id="stCount">0 création</span></div><div class="panel-body"><input class="search" id="stSearch" placeholder="Rechercher une création..."><div id="stList" class="stack-list top-gap"></div></div></div>
+      <div class="panel history-panel"><div class="panel-head"><h3>Productions Studio</h3><span id="stCount">0 production</span></div><div class="panel-body"><input class="search" id="stSearch" placeholder="Rechercher une production..."><div id="stList" class="stack-list top-gap"></div></div></div>
     </section>
 
     <section class="view" id="view-reports">
@@ -202,6 +211,6 @@
   </main>
 </div>
 <div class="toast" id="toast"></div>
-<script src="app.js?v=221"></script>
+<script src="app.js?v=222"></script>
 </body>
 </html>
