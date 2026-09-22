@@ -49,7 +49,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 @media(max-width:700px){.library-item{grid-template-columns:24px 32px minmax(0,1fr)}.library-item .mini-actions{grid-column:2/-1;justify-content:flex-start}.library-selection .btn{flex:1}.library-tools select{width:100%}}
 
 
-/* Studio V2.2 — atelier de production */
+/* Studio V2.3 — atelier de production */
 .studio-production-intro{padding:20px 22px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px;align-items:center;margin-bottom:14px}
 .studio-production-intro h2{margin:5px 0 7px;font-size:24px}
 .studio-production-intro p{margin:0;color:#aeb8be;max-width:760px}
@@ -59,7 +59,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 @media(max-width:720px){.studio-production-intro{grid-template-columns:1fr;padding:16px}.studio-production-types{justify-content:flex-start}}
 
 
-/* Studio V2.2 — sélection globale et pré-montage */
+/* Studio V2.3 — sélection globale et pré-montage */
 .studio-asset-selection{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
 .studio-asset-selection span{font-size:9px;color:#7f8b94}
 .studio-storyboard-panel{margin-top:14px}
@@ -76,7 +76,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 @media(max-width:460px){.studio-storyboard{grid-template-columns:1fr}}
 
 
-/* Studio V2.2 — rendu vidéo local */
+/* Studio V2.3 — rendu vidéo local */
 .studio-render-panel{margin-top:14px}
 .studio-render-body{display:grid;gap:12px}
 .studio-render-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
@@ -90,7 +90,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 @media(max-width:720px){.studio-render-actions{align-items:stretch}.studio-render-actions .btn{flex:1 1 100%}.studio-render-preview{max-height:500px}}
 
 
-/* Studio V2.2 — durée cible et modifications textuelles */
+/* Studio V2.3 — durée cible et modifications textuelles */
 #stDurationWrap small{display:block;margin-top:5px;color:#77848d;font-size:8px;text-transform:none;letter-spacing:0}
 .studio-storyboard-toolbar{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
 .studio-storyboard-toolbar span{font-size:10px;color:#ef8d92;font-weight:850}
@@ -101,7 +101,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 @media(max-width:720px){.studio-storyboard-toolbar{align-items:stretch}.studio-storyboard-toolbar .btn{width:100%}}
 
 
-/* Studio V2.2 — lisibilité, lecture, réordonnancement et transitions */
+/* Studio V2.3 — lisibilité, lecture, réordonnancement et transitions */
 #view-studio .form-grid label{font-size:11px}
 #view-studio .form-grid input,#view-studio .form-grid select,#view-studio .form-grid textarea,#view-studio .search{font-size:13px;line-height:1.45}
 #view-studio .studio-hint,#view-studio .file-note{font-size:11px;line-height:1.5}
@@ -131,13 +131,13 @@ button:disabled{opacity:.45;cursor:not-allowed}
 @media(max-width:520px){.studio-transition-presets{grid-template-columns:1fr}}
 
 
-/* Studio V2.2 — retrait de séquence */
+/* Studio V2.3 — retrait de séquence */
 .storyboard-remove{position:absolute;right:8px;top:8px;border:1px solid rgba(255,130,136,.7);background:rgba(38,9,12,.88);color:#ffd9db;border-radius:999px;padding:6px 9px;font-size:9px;font-weight:850;backdrop-filter:blur(4px);z-index:3}
 .storyboard-remove:hover{background:#8f272e;border-color:#ef858a;color:#fff}
 .storyboard-card.playing .storyboard-remove{opacity:.9}
 
 
-/* Studio V2.2 — prévisualisation complète, durée par séquence et annulation */
+/* Studio V2.3 — prévisualisation complète, durée par séquence et annulation */
 .storyboard-preview-progress{position:absolute;left:8px;right:8px;bottom:4px;height:3px;border-radius:999px;background:rgba(255,255,255,.16);overflow:hidden;pointer-events:none}
 .storyboard-preview-progress span{display:block;width:0;height:100%;background:#e4323b;transition:width .08s linear}
 .storyboard-duration{display:grid;grid-template-columns:auto auto minmax(54px,72px) auto;gap:5px;align-items:center;margin-top:7px;padding-top:7px;border-top:1px solid #263139}
@@ -149,3 +149,12 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .danger-outline:not(:disabled):hover{border-color:#b94a53!important;background:#291014!important;color:#fff!important}
 .danger-outline:disabled{opacity:.38;cursor:not-allowed}
 @media(max-width:520px){.storyboard-duration{grid-template-columns:auto auto 1fr auto}.storyboard-play{max-width:58%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+
+
+/* Studio V2.3 — panneau transitions visible */
+.studio-storyboard-actions{display:flex;gap:8px;flex-wrap:wrap}
+.studio-transition-panel{border:1px solid #34414a;border-radius:11px;background:#0c1318;padding:12px;margin-bottom:12px}
+#stTransitionsToggle{border-color:#714147}
+#stTransitionsToggle:not([hidden]){display:inline-flex}
+#stTransitionSummary{margin:8px 0 0}
+@media(max-width:720px){.studio-storyboard-actions{width:100%}.studio-storyboard-actions .btn{flex:1 1 220px}}
