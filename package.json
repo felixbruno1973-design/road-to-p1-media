@@ -1,10 +1,10 @@
 {
   "name": "road-to-p1-media",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "private": true,
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check app.js && node --check worker/index.js"
+    "check": "node --check app.js && node --check worker/index.js && node --check cloud/worker.js"
   }
 }
