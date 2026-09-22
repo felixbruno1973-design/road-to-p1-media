@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#080b10">
-<title>ROAD TO P1 Media — V2.2</title>
-<link rel="stylesheet" href="style.css?v=228">
+<title>ROAD TO P1 Media — V2.3</title>
+<link rel="stylesheet" href="style.css?v=230">
 </head>
 <body>
 <div class="app">
@@ -13,7 +13,7 @@
     <div class="brand">
       <img id="officialLogo" class="official-logo" alt="ROAD TO P1">
       <div class="product">MEDIA</div>
-      <div class="version">V2.2</div>
+      <div class="version">V2.3</div>
     </div>
     <nav class="nav">
       <button class="active" data-view="home"><span>⌂</span>Accueil</button>
@@ -28,12 +28,12 @@
   <main class="main">
     <header class="topbar">
       <div><div class="eyebrow">ROAD TO P1 • MEDIA</div><h1 id="pageTitle">Media Center</h1><p id="pageSubtitle">Créer, structurer, entraîner et conserver.</p></div>
-      <div class="top-actions"><span class="status"><i></i>Media V2.2</span></div>
+      <div class="top-actions"><span class="status"><i></i>Media V2.3</span></div>
     </header>
 
     <section class="view active" id="view-home">
       <div class="hero panel">
-        <div><span class="kicker">MEDIA V2.2</span><h2>Quatre modules.<br>Une seule histoire ROAD TO P1.</h2><p>Studio crée les contenus, Reports structure les bilans, Media Training prépare Lara et Aaron à prendre la parole, et Library conserve les ressources médias.</p></div>
+        <div><span class="kicker">MEDIA V2.3</span><h2>Quatre modules.<br>Une seule histoire ROAD TO P1.</h2><p>Studio crée les contenus, Reports structure les bilans, Media Training prépare Lara et Aaron à prendre la parole, et Library conserve les ressources médias.</p></div>
         <div class="hero-metrics four">
           <div><b id="homeStudio">0</b><span>créations</span></div>
           <div><b id="homeReports">0</b><span>rapports</span></div>
@@ -88,18 +88,24 @@
         <div class="panel-head"><h3 id="stStoryboardTitle">Pré-montage proposé</h3><span id="stStoryboardMeta">Sélectionnez des médias</span></div>
         <div class="panel-body">
           <div class="studio-storyboard-toolbar">
-            <button class="btn" id="stEditVideo">✏️ Modifier le montage</button>
+            <div class="studio-storyboard-actions">
+              <button class="btn" id="stEditVideo">✏️ Modifier le montage</button>
+              <button class="btn" id="stTransitionsToggle">🎞 Choisir les transitions</button>
+            </div>
             <span id="stDurationSummary">Durée cible : 60 s</span>
           </div>
-          <div class="studio-edit-panel" id="stEditPanel" hidden>
-            <label>Ajustements demandés<textarea id="stEditInstructions" placeholder="Ex. vidéo de 60 secondes, plans piste plus longs, intro de 2 secondes, rythme plus dynamique..."></textarea></label>
+          <div class="studio-transition-panel" id="stTransitionPanel" hidden>
             <div class="studio-transition-presets">
-              <span>Exemples de transitions</span>
+              <span>Choisir une transition</span>
               <button type="button" data-st-transition="Cut"><b>Cut net</b><small>Passage immédiat</small></button>
               <button type="button" data-st-transition="Fondu noir"><b>Fondu noir</b><small>Transition douce</small></button>
               <button type="button" data-st-transition="Flash blanc"><b>Flash blanc</b><small>Effet dynamique</small></button>
               <button type="button" data-st-transition="Volet"><b>Volet</b><small>Balayage rapide</small></button>
             </div>
+            <p class="file-note" id="stTransitionSummary">Transition actuelle : Fondu noir.</p>
+          </div>
+          <div class="studio-edit-panel" id="stEditPanel" hidden>
+            <label>Ajustements demandés<textarea id="stEditInstructions" placeholder="Ex. vidéo de 60 secondes, plans piste plus longs, intro de 2 secondes, rythme plus dynamique..."></textarea></label>
             <div class="actions"><button class="btn primary" id="stApplyEdits">Appliquer les modifications</button></div>
             <p class="file-note" id="stEditSummary">Les ajustements seront appliqués au storyboard puis au prochain rendu vidéo.</p>
           </div>
@@ -247,10 +253,10 @@
       <div class="panel library-preview-panel"><div class="panel-head"><h3>Aperçu</h3><span id="libPreviewMeta">Sélectionnez un média</span></div><div id="libPreview" class="library-preview"><div class="empty">Aucun média sélectionné.</div></div></div>
     </section>
 
-    <footer>ROAD TO P1 Media • V2.2</footer>
+    <footer>ROAD TO P1 Media • V2.3</footer>
   </main>
 </div>
 <div class="toast" id="toast"></div>
-<script src="app.js?v=228"></script>
+<script src="app.js?v=230"></script>
 </body>
 </html>
