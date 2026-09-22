@@ -88,3 +88,14 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .studio-render-preview{display:block;width:min(100%,760px);max-height:620px;margin:2px auto 0;border:1px solid #34414a;border-radius:13px;background:#050709}
 [hidden]{display:none!important}
 @media(max-width:720px){.studio-render-actions{align-items:stretch}.studio-render-actions .btn{flex:1 1 100%}.studio-render-preview{max-height:500px}}
+
+
+/* Studio V2.2 — durée cible et modifications textuelles */
+#stDurationWrap small{display:block;margin-top:5px;color:#77848d;font-size:8px;text-transform:none;letter-spacing:0}
+.studio-storyboard-toolbar{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.studio-storyboard-toolbar span{font-size:10px;color:#ef8d92;font-weight:850}
+.studio-edit-panel{border:1px solid #34414a;border-radius:11px;background:#0c1318;padding:12px;margin-bottom:12px;display:grid;gap:10px}
+.studio-edit-panel label{font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:#8a969e}
+.studio-edit-panel textarea{display:block;width:100%;min-height:92px;margin-top:5px;border:1px solid #34414a;background:#0d1419;color:#eef2f4;border-radius:9px;padding:9px 10px;resize:vertical}
+.studio-edit-panel textarea:focus{border-color:#6f4b50;outline:none}
+@media(max-width:720px){.studio-storyboard-toolbar{align-items:stretch}.studio-storyboard-toolbar .btn{width:100%}}

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#080b10">
 <title>ROAD TO P1 Media — V2.2</title>
-<link rel="stylesheet" href="style.css?v=224">
+<link rel="stylesheet" href="style.css?v=225">
 </head>
 <body>
 <div class="app">
@@ -67,6 +67,7 @@
             <label>Statut<select id="stStatus"><option>Brouillon</option><option>À valider</option><option>Prêt</option><option>Publié</option></select></label>
             <label class="span2">Événement / sujet<input id="stEvent" placeholder="Ex. Anneville — Championnat de France"></label>
             <label>Ton<select id="stTone"><option>Sportif</option><option>Humain</option><option>Partenaire</option><option>Institutionnel</option><option>Énergique</option></select></label>
+            <label id="stDurationWrap" hidden>Durée cible (secondes)<input type="number" id="stDuration" min="5" max="600" step="1" value="60"><small>La durée finale visée, introduction et conclusion comprises.</small></label>
             <div id="stProductionHint" class="studio-hint">Ajoutez les faits, messages, résultats ou idées qui doivent apparaître dans l’article.</div>
             <label class="span2"><span id="stObjectiveLabel">Éléments à intégrer / brief</span><textarea id="stObjective" placeholder="Résultats, faits marquants, citations, message principal, partenaires, informations à intégrer..."></textarea></label>
             <div class="actions span2"><button class="btn" id="stGenerate">Créer la proposition Studio</button><button class="btn primary" id="stSave">Enregistrer</button></div>
@@ -85,7 +86,18 @@
       </div>
       <div class="panel studio-storyboard-panel">
         <div class="panel-head"><h3 id="stStoryboardTitle">Pré-montage proposé</h3><span id="stStoryboardMeta">Sélectionnez des médias</span></div>
-        <div class="panel-body"><div id="stStoryboard" class="studio-storyboard"><div class="empty">Le montage proposé apparaîtra ici à partir des médias sélectionnés.</div></div></div>
+        <div class="panel-body">
+          <div class="studio-storyboard-toolbar">
+            <button class="btn" id="stEditVideo">✏️ Modifier le montage</button>
+            <span id="stDurationSummary">Durée cible : 60 s</span>
+          </div>
+          <div class="studio-edit-panel" id="stEditPanel" hidden>
+            <label>Ajustements demandés<textarea id="stEditInstructions" placeholder="Ex. vidéo de 60 secondes, transitions plus douces, intro de 2 secondes, rythme plus dynamique, conclusion plus courte..."></textarea></label>
+            <div class="actions"><button class="btn primary" id="stApplyEdits">Appliquer les modifications</button></div>
+            <p class="file-note" id="stEditSummary">Les ajustements seront appliqués au storyboard puis au prochain rendu vidéo.</p>
+          </div>
+          <div id="stStoryboard" class="studio-storyboard"><div class="empty">Le montage proposé apparaîtra ici à partir des médias sélectionnés.</div></div>
+        </div>
       </div>
       <div class="panel studio-render-panel" id="stRenderPanel" hidden>
         <div class="panel-head"><h3>Génération vidéo locale</h3><span id="stRenderFormat">Aucun rendu</span></div>
@@ -231,6 +243,6 @@
   </main>
 </div>
 <div class="toast" id="toast"></div>
-<script src="app.js?v=224"></script>
+<script src="app.js?v=225"></script>
 </body>
 </html>
