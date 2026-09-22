@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#080b10">
 <title>ROAD TO P1 Media — V2.2</title>
-<link rel="stylesheet" href="style.css?v=225">
+<link rel="stylesheet" href="style.css?v=226">
 </head>
 <body>
 <div class="app">
@@ -92,7 +92,14 @@
             <span id="stDurationSummary">Durée cible : 60 s</span>
           </div>
           <div class="studio-edit-panel" id="stEditPanel" hidden>
-            <label>Ajustements demandés<textarea id="stEditInstructions" placeholder="Ex. vidéo de 60 secondes, transitions plus douces, intro de 2 secondes, rythme plus dynamique, conclusion plus courte..."></textarea></label>
+            <label>Ajustements demandés<textarea id="stEditInstructions" placeholder="Ex. vidéo de 60 secondes, plans piste plus longs, intro de 2 secondes, rythme plus dynamique..."></textarea></label>
+            <div class="studio-transition-presets">
+              <span>Exemples de transitions</span>
+              <button type="button" data-st-transition="Cut"><b>Cut net</b><small>Passage immédiat</small></button>
+              <button type="button" data-st-transition="Fondu noir"><b>Fondu noir</b><small>Transition douce</small></button>
+              <button type="button" data-st-transition="Flash blanc"><b>Flash blanc</b><small>Effet dynamique</small></button>
+              <button type="button" data-st-transition="Volet"><b>Volet</b><small>Balayage rapide</small></button>
+            </div>
             <div class="actions"><button class="btn primary" id="stApplyEdits">Appliquer les modifications</button></div>
             <p class="file-note" id="stEditSummary">Les ajustements seront appliqués au storyboard puis au prochain rendu vidéo.</p>
           </div>
@@ -243,6 +250,6 @@
   </main>
 </div>
 <div class="toast" id="toast"></div>
-<script src="app.js?v=225"></script>
+<script src="app.js?v=226"></script>
 </body>
 </html>

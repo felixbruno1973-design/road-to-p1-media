@@ -99,3 +99,33 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .studio-edit-panel textarea{display:block;width:100%;min-height:92px;margin-top:5px;border:1px solid #34414a;background:#0d1419;color:#eef2f4;border-radius:9px;padding:9px 10px;resize:vertical}
 .studio-edit-panel textarea:focus{border-color:#6f4b50;outline:none}
 @media(max-width:720px){.studio-storyboard-toolbar{align-items:stretch}.studio-storyboard-toolbar .btn{width:100%}}
+
+
+/* Studio V2.2 — lisibilité, lecture, réordonnancement et transitions */
+#view-studio .form-grid label{font-size:11px}
+#view-studio .form-grid input,#view-studio .form-grid select,#view-studio .form-grid textarea,#view-studio .search{font-size:13px;line-height:1.45}
+#view-studio .studio-hint,#view-studio .file-note{font-size:11px;line-height:1.5}
+#view-studio .panel-head h3{font-size:15px}
+#view-studio .panel-head span{font-size:11px}
+#view-studio .asset-check b{font-size:12px}
+#view-studio .asset-check small{font-size:10px;line-height:1.4}
+#view-studio .storyboard-info span{font-size:9px}
+#view-studio .storyboard-info b{font-size:13px}
+#view-studio .storyboard-info small{font-size:10px}
+.studio-transition-presets{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.studio-transition-presets>span{grid-column:1/-1;font-size:10px;color:#aeb8be;font-weight:800;text-transform:none;letter-spacing:0}
+.studio-transition-presets button{border:1px solid #34414a;border-radius:10px;background:#0d1419;color:#dce3e6;padding:10px;text-align:left;display:grid;gap:2px}
+.studio-transition-presets button b{font-size:11px}
+.studio-transition-presets button small{font-size:9px;color:#7e8b94}
+.studio-transition-presets button.active{border-color:#a64047;background:#25171a;box-shadow:0 0 0 1px rgba(228,50,59,.15) inset}
+.storyboard-card[draggable="true"]{cursor:grab;transition:transform .15s,border-color .15s,opacity .15s}
+.storyboard-card[draggable="true"]:active{cursor:grabbing}
+.storyboard-card.dragging{opacity:.45;transform:scale(.97)}
+.storyboard-card.drag-over{border-color:#e4323b;transform:translateY(-3px)}
+.storyboard-media{position:relative}
+.storyboard-play{position:absolute;left:8px;bottom:8px;border:1px solid rgba(255,255,255,.55);background:rgba(5,8,11,.82);color:#fff;border-radius:999px;padding:6px 9px;font-size:10px;font-weight:850;backdrop-filter:blur(4px)}
+.storyboard-card.playing{border-color:#e4323b;box-shadow:0 0 0 1px rgba(228,50,59,.2),0 15px 32px rgba(0,0,0,.28)}
+.storyboard-card.playing .storyboard-play{background:#a72f36}
+.storyboard-drag-hint{margin-top:4px!important;color:#69777f!important;font-style:italic;white-space:normal!important}
+@media(max-width:900px){.studio-transition-presets{grid-template-columns:1fr 1fr}}
+@media(max-width:520px){.studio-transition-presets{grid-template-columns:1fr}}
