@@ -32,7 +32,7 @@ Fonctions disponibles :
 - aperçu des images, vidéos et PDF ;
 - détection améliorée du type des anciens fichiers lorsque le navigateur n’a pas enregistré correctement leur type MIME.
 
-Les fichiers sont enregistrés dans IndexedDB. Aucun service cloud, Worker, R2, D1 ou synchronisation multi-appareils n’est utilisé.
+Les fichiers sont enregistrés directement dans IndexedDB sur l’appareil utilisé.
 
 ## Media Training
 
