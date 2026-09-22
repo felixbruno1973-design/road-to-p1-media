@@ -187,6 +187,15 @@ function reorderStudioSequence(dragId,targetId){
  $('stText').value=studioTemplate($('stPilot').value,$('stType').value,$('stEvent').value.trim(),$('stObjective').value.trim(),$('stTone').value,selectedAssets(),$('stChannel').value);
  toast('Ordre des séquences modifié.');
 }
+function removeStudioSequence(id){
+ if(!id||!studioSelected.has(id))return;
+ stopStudioStoryboardPlayback();studioSelected.delete(id);resetStudioRendered();
+ renderStudioAssets();
+ $('stText').value=studioTemplate($('stPilot').value,$('stType').value,$('stEvent').value.trim(),$('stObjective').value.trim(),$('stTone').value,selectedAssets(),$('stChannel').value);
+ const remaining=studioSelected.size,target=studioTargetSeconds();
+ if($('stEditSummary'))$('stEditSummary').textContent=remaining?'Séquence retirée. Les '+remaining+' séquence'+(remaining>1?'s':'')+' restante'+(remaining>1?'s':'')+' ont été recalculées pour conserver '+target+' s.':'Toutes les séquences ont été retirées du montage.';
+ toast(remaining?'Séquence retirée • durée cible '+target+' s conservée.':'Dernière séquence retirée.');
+}
 function stopStudioStoryboardPlayback(){
  if(studioStoryPlayTimer){clearTimeout(studioStoryPlayTimer);studioStoryPlayTimer=null}
  document.querySelectorAll('.storyboard-card.playing').forEach(function(card){card.classList.remove('playing');const b=card.querySelector('[data-story-play]');if(b)b.textContent='▶ Lire'});
@@ -337,11 +346,13 @@ function renderStudioStoryboard(){
    timing=studioFormatSeconds(start)+' → '+studioFormatSeconds(end)+' • '+studioFormatSeconds(duration);
   }else timing=production==='Montage photo'?'Visuel '+(i+1):'Source '+(i+1);
   const play=production==='Montage vidéo'?'<button type="button" class="storyboard-play" data-story-play="'+x.id+'" data-story-duration="'+duration+'">▶ Lire</button>':'';
+  const remove=production==='Montage vidéo'?'<button type="button" class="storyboard-remove" data-story-remove="'+x.id+'" title="Retirer cette séquence du montage">✕ Supprimer</button>':'';
   const drag=production==='Montage vidéo'?' draggable="true" data-story-id="'+x.id+'"':'';
   const hint=production==='Montage vidéo'?'<small class="storyboard-drag-hint">Glisser l’image pour déplacer la séquence</small>':'';
-  return '<article class="storyboard-card"'+drag+'><div class="storyboard-media">'+studioStoryboardPreview(x)+play+'</div><div class="storyboard-info"><span>'+esc(timing)+'</span><b>'+esc(role)+'</b><small>'+esc(x.name)+'</small>'+hint+'</div></article>';
+  return '<article class="storyboard-card"'+drag+'><div class="storyboard-media">'+studioStoryboardPreview(x)+play+remove+'</div><div class="storyboard-info"><span>'+esc(timing)+'</span><b>'+esc(role)+'</b><small>'+esc(x.name)+'</small>'+hint+'</div></article>';
  }).join('');
  document.querySelectorAll('[data-story-play]').forEach(function(b){b.onclick=function(e){e.preventDefault();e.stopPropagation();playStudioStoryboardItem(b.dataset.storyPlay,Number(b.dataset.storyDuration)||2500)}});
+ document.querySelectorAll('[data-story-remove]').forEach(function(b){b.onclick=function(e){e.preventDefault();e.stopPropagation();removeStudioSequence(b.dataset.storyRemove)};b.onmousedown=function(e){e.stopPropagation()}});
  if(production==='Montage vidéo'){
   let dragId='';
   document.querySelectorAll('[data-story-id]').forEach(function(card){
