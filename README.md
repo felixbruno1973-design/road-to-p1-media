@@ -1,22 +1,41 @@
-# ROAD TO P1 Media — V2.1
+# ROAD TO P1 Media — V2.2
 
-ROAD TO P1 Media est désormais organisé autour de quatre modules complémentaires :
+ROAD TO P1 Media est organisé autour de quatre modules complémentaires :
 
 - **Studio** : création de posts, stories, reels, scripts vidéo, annonces avant-course et contenus partenaires à partir des ressources disponibles.
 - **Reports** : rapports de course, bilans partenaires, bilans mensuels ou de saison et communiqués structurés.
-- **Media Training** : parcours en quatre espaces — bases de la communication, simulations médias, culture automobile et entretien vocal « Improve Your English ».
-- **Library** : bibliothèque centrale de photos, vidéos, logos et documents, stockés localement dans le navigateur via IndexedDB et réutilisables par Studio.
+- **Media Training** : bases de la communication, simulations médias, Culture automobile niveau expert et entretien vocal « Improve Your English ».
+- **Library** : bibliothèque centrale de photos, vidéos, logos et documents, utilisable en stockage local ou via une API Cloudflare R2 + D1.
 
-## Évolution V2.0
+## Media Training V2.2 — Culture automobile expert
 
-Le module **Web Design** de la V1 est retiré de l'application. La gestion et la modification du site `road-to-p1.com` sont désormais réalisées directement avec ChatGPT Work, afin d'éviter une couche technique intermédiaire fragile.
+Le quiz léger de V2.1 devient un véritable parcours d'apprentissage :
 
-Les données existantes de **Reports** et **Media Training** restent compatibles avec le stockage local de la V1. Les nouveaux médias ajoutés à Library sont stockés dans le navigateur utilisé : ils ne sont pas encore synchronisés entre plusieurs appareils.
+- 8 thèmes : histoire automobile, Formule 1, endurance/Le Mans, rallye/WRC, technique/dynamique, karting, circuits et grandes figures, sécurité.
+- 40 questions réparties en niveaux **Confirmé**, **Expert** et **Pro**.
+- Après chaque réponse : justification, résumé historique ou technique, points à retenir, explication des mauvaises propositions, question d'oral et source ouverte.
+- Suivi de la maîtrise par thème et mémorisation des notions déjà acquises.
+- Les données V2.1 restent compatibles.
 
-## Media Training V2.1
+## Library V2.2 — multi-appareils
 
-- Six leçons progressives de communication, accompagnées d'exercices et de liens vers des sources ouvertes.
-- Conservation des simulations médias FR/EN et de leur historique.
-- Quiz de culture automobile et de sport automobile organisés par thème.
-- Entretien vocal anglais à trois niveaux utilisant la reconnaissance et la synthèse vocales du navigateur.
-- Préparation de l'interface pour une future connexion sécurisée à OpenAI Realtime, nécessaire aux relances réellement génératives.
+La Library conserve le mode IndexedDB local par défaut. La V2.2 ajoute un client cloud optionnel :
+
+- **Cloudflare R2** pour les fichiers (photos, vidéos, logos, documents).
+- **Cloudflare D1** pour le catalogue et les métadonnées.
+- Upload multipart par morceaux pour mieux supporter les vidéos volumineuses.
+- Aucun secret R2 n'est intégré au code public de l'application.
+- Si le cloud est indisponible, l'application retombe sur la Library locale.
+
+Le backend prêt à déployer se trouve dans `cloud/` :
+
+- `cloud/worker.js` : API Worker sécurisée.
+- `cloud/schema.sql` : schéma D1.
+- `cloud/wrangler.toml.example` : exemple de configuration R2/D1.
+- `cloud/README.md` : procédure de mise en service.
+
+> Tant que le Worker Cloudflare n'est pas déployé et configuré dans l'interface, la Library continue de fonctionner en mode local.
+
+## Media Training
+
+Les six leçons de communication et les simulations médias FR/EN sont conservées. Improve Your English utilise toujours la reconnaissance et la synthèse vocales du navigateur ; l'interface reste préparée pour une future connexion sécurisée à OpenAI Realtime pour des relances réellement génératives.
