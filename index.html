@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#080b10">
 <title>ROAD TO P1 Media — V2.2</title>
-<link rel="stylesheet" href="style.css?v=223">
+<link rel="stylesheet" href="style.css?v=224">
 </head>
 <body>
 <div class="app">
@@ -86,6 +86,21 @@
       <div class="panel studio-storyboard-panel">
         <div class="panel-head"><h3 id="stStoryboardTitle">Pré-montage proposé</h3><span id="stStoryboardMeta">Sélectionnez des médias</span></div>
         <div class="panel-body"><div id="stStoryboard" class="studio-storyboard"><div class="empty">Le montage proposé apparaîtra ici à partir des médias sélectionnés.</div></div></div>
+      </div>
+      <div class="panel studio-render-panel" id="stRenderPanel" hidden>
+        <div class="panel-head"><h3>Génération vidéo locale</h3><span id="stRenderFormat">Aucun rendu</span></div>
+        <div class="panel-body studio-render-body">
+          <div class="studio-render-actions">
+            <button class="btn primary" id="stRenderVideo">🎬 Générer la vidéo</button>
+            <button class="btn" id="stSaveRender" disabled>Ajouter le rendu à Library</button>
+            <a class="btn" id="stDownloadRender" hidden>Télécharger le rendu</a>
+          </div>
+          <div class="studio-render-progress" id="stRenderProgress" aria-live="polite">
+            <div><span id="stRenderProgressBar"></span></div><small id="stRenderStatus">Le rendu est effectué uniquement sur cet appareil.</small>
+          </div>
+          <video id="stRenderPreview" class="studio-render-preview" controls playsinline hidden></video>
+          <p class="file-note">Le montage utilise les médias sélectionnés dans leur ordre actuel, avec titres et habillage Road to P1. Aucun fichier n’est envoyé vers un serveur.</p>
+        </div>
       </div>
       <div class="panel history-panel"><div class="panel-head"><h3>Productions Studio</h3><span id="stCount">0 production</span></div><div class="panel-body"><input class="search" id="stSearch" placeholder="Rechercher une production..."><div id="stList" class="stack-list top-gap"></div></div></div>
     </section>
@@ -216,6 +231,6 @@
   </main>
 </div>
 <div class="toast" id="toast"></div>
-<script src="app.js?v=223"></script>
+<script src="app.js?v=224"></script>
 </body>
 </html>
