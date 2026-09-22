@@ -8,7 +8,7 @@
 @media(max-width:950px){.culture-layout,.english-layout{grid-template-columns:1fr}.learning-grid{grid-template-columns:repeat(2,1fr)}.training-tabs{grid-template-columns:1fr 1fr}}
 @media(max-width:720px){.training-intro{grid-template-columns:1fr;padding:17px}.training-progress{width:100%;height:68px}.training-tabs{grid-template-columns:1fr}.learning-grid{grid-template-columns:1fr}.lesson-footer{align-items:stretch;flex-direction:column}.english-metrics{grid-template-columns:1fr}.speech{max-width:92%}}
 
-/* V2.2 — expert culture + cloud library */
+/* V2.2 — expert culture */
 .culture-level-label{display:grid;gap:5px;font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:#8a969e}
 .culture-level-label select{width:100%;border:1px solid #34414a;background:#0d1419;color:#eef2f4;border-radius:9px;padding:9px 10px}
 .culture-stats{border:1px solid #34414a;border-radius:11px;background:#0c1318;padding:12px;display:grid;gap:2px}
@@ -21,10 +21,7 @@
 .dossier-summary{font-size:11px;line-height:1.6;color:#d2d9dc}.dossier-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.dossier-grid>div{border:1px solid #2d3942;border-radius:10px;padding:11px;background:#0d1419}.dossier-grid h4{margin:0 0 7px;font-size:10px}.dossier-grid ul{margin:0;padding-left:17px;color:#9eabb2;font-size:9px;line-height:1.55}
 .dossier-follow{margin-top:12px;padding:11px;border-left:3px solid #d84850;background:#171316}.dossier-follow span{font-size:8px;font-weight:900;color:#ef8388}.dossier-follow p{margin:4px 0 0;font-size:11px}
 .dossier-source{display:inline-block;margin-top:10px;color:#91a9b8;font-size:9px}
-.cloud-config{border:1px solid #34414a;border-radius:12px;background:#0c1318;padding:11px}.cloud-state{display:grid;grid-template-columns:12px 1fr;gap:2px 8px;align-items:center}.cloud-state b{font-size:11px}.cloud-state span{grid-column:2;font-size:8px;color:#7d8a93}.cloud-dot{width:9px;height:9px;border-radius:50%;background:#59656d}.cloud-dot.online{background:#35c884;box-shadow:0 0 0 5px rgba(53,200,132,.09)}
-.cloud-config details{margin-top:9px}.cloud-config summary{cursor:pointer;color:#9da9b0;font-size:9px}.cloud-fields{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:10px}.cloud-fields label{font-size:8px;text-transform:uppercase;color:#84919a}.cloud-fields input{display:block;width:100%;margin-top:4px;border:1px solid #34414a;background:#0d1419;color:#eef2f4;border-radius:8px;padding:8px}
-.cloud-label{color:#6bd89a;font-weight:900}
-@media(max-width:720px){.dossier-grid,.cloud-fields{grid-template-columns:1fr}.dossier-head{display:grid}}
+@media(max-width:720px){.dossier-grid{grid-template-columns:1fr}.dossier-head{display:grid}}
 
 /* Library V2.2: local folders, selection and visible media preview. */
 .library-folders{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
