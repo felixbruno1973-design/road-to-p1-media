@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#080b10">
-<title>ROAD TO P1 Media — V2.1</title>
-<link rel="stylesheet" href="style.css?v=210">
+<title>ROAD TO P1 Media — V2.2</title>
+<link rel="stylesheet" href="style.css?v=220">
 </head>
 <body>
 <div class="app">
@@ -13,7 +13,7 @@
     <div class="brand">
       <img id="officialLogo" class="official-logo" alt="ROAD TO P1">
       <div class="product">MEDIA</div>
-      <div class="version">V2.1</div>
+      <div class="version">V2.2</div>
     </div>
     <nav class="nav">
       <button class="active" data-view="home"><span>⌂</span>Accueil</button>
@@ -28,12 +28,12 @@
   <main class="main">
     <header class="topbar">
       <div><div class="eyebrow">ROAD TO P1 • MEDIA</div><h1 id="pageTitle">Media Center</h1><p id="pageSubtitle">Créer, structurer, entraîner et conserver.</p></div>
-      <div class="top-actions"><span class="status"><i></i>Media V2.1</span></div>
+      <div class="top-actions"><span class="status"><i></i>Media V2.2</span></div>
     </header>
 
     <section class="view active" id="view-home">
       <div class="hero panel">
-        <div><span class="kicker">MEDIA V2.0</span><h2>Quatre modules.<br>Une seule histoire ROAD TO P1.</h2><p>Studio crée les contenus, Reports structure les bilans, Media Training prépare Lara et Aaron à prendre la parole, et Library conserve les ressources médias.</p></div>
+        <div><span class="kicker">MEDIA V2.2</span><h2>Quatre modules.<br>Une seule histoire ROAD TO P1.</h2><p>Studio crée les contenus, Reports structure les bilans, Media Training prépare Lara et Aaron à prendre la parole, et Library conserve les ressources médias.</p></div>
         <div class="hero-metrics four">
           <div><b id="homeStudio">0</b><span>créations</span></div>
           <div><b id="homeReports">0</b><span>rapports</span></div>
@@ -137,12 +137,17 @@
 
       <div class="training-pane" id="training-culture">
         <div class="culture-layout">
-          <div class="panel culture-menu"><div class="panel-head"><h3>Choisir un thème</h3><span>Histoire & compétition</span></div><div class="panel-body" id="cultureThemes"></div></div>
+          <div class="panel culture-menu"><div class="panel-head"><h3>Programme expert</h3><span>Histoire • technique • compétition</span></div><div class="panel-body">
+<label class="culture-level-label">Niveau cible<select id="cultureLevel"><option value="confirmed">Confirmé</option><option value="expert">Expert</option><option value="pro" selected>Pro</option></select></label>
+<div id="cultureStats" class="culture-stats"></div>
+<div id="cultureThemes" class="culture-theme-list"></div>
+</div></div>
           <div class="panel culture-quiz">
             <div class="question-head"><span id="cultureBadge">CULTURE AUTOMOBILE</span><small id="cultureScore">0 bonne réponse</small></div>
             <div class="question" id="cultureQuestion">Choisissez un thème pour commencer.</div>
             <div class="quiz-options" id="cultureOptions"></div>
             <div class="quiz-feedback" id="cultureFeedback"></div>
+            <div id="cultureDossier" class="culture-dossier-host"><div class="culture-intro"><b>Objectif</b><p>Choisissez un thème. Après chaque réponse, une fiche historique ou technique détaillée apparaîtra ici.</p></div></div>
             <button class="btn primary" id="cultureNext" disabled>Question suivante</button>
           </div>
         </div>
@@ -170,8 +175,9 @@
     <section class="view" id="view-library">
       <div class="section-grid library-grid">
         <div class="panel form-panel">
-          <div class="panel-head"><h3>Ajouter à Library</h3><span>Stockage local sécurisé par le navigateur</span></div>
+          <div class="panel-head"><h3>Ajouter à Library</h3><span>Local ou Cloud R2 multi-appareils</span></div>
           <div class="panel-body form-grid">
+            <div class="span2 cloud-config"><div id="cloudState" class="cloud-state"></div><details><summary>Configurer la synchronisation cloud</summary><div class="cloud-fields"><label>URL API Cloud<input id="cloudApi" placeholder="https://...workers.dev"></label><label>Clé d’accès<input id="cloudToken" type="password" autocomplete="off" placeholder="Clé privée de votre Library"></label><div class="actions span2"><button type="button" class="btn" id="cloudLocal">Rester en local</button><button type="button" class="btn primary" id="cloudSave">Activer le cloud</button></div></div></details></div>
             <label class="span2 upload-zone">Fichiers<input type="file" id="libFiles" multiple accept="image/*,video/*,.pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.webp,.mp4,.mov"></label>
             <label>Pilote<select id="libPilot"><option>ROAD TO P1</option><option>Lara</option><option>Aaron</option><option>Commun</option></select></label>
             <label>Catégorie<select id="libCategory"><option>Automatique</option><option>Photo</option><option>Vidéo</option><option>Logo</option><option>Document</option></select></label>
@@ -193,10 +199,10 @@
       <div class="panel library-preview-panel"><div class="panel-head"><h3>Aperçu</h3><span id="libPreviewMeta">Sélectionnez un média</span></div><div id="libPreview" class="library-preview"><div class="empty">Aucun média sélectionné.</div></div></div>
     </section>
 
-    <footer>ROAD TO P1 Media • V2.1</footer>
+    <footer>ROAD TO P1 Media • V2.2</footer>
   </main>
 </div>
 <div class="toast" id="toast"></div>
-<script src="app.js?v=210"></script>
+<script src="app.js?v=220"></script>
 </body>
 </html>
