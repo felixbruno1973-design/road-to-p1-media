@@ -210,6 +210,8 @@ function setStudioTransitionPreset(name){
  const p=presets[name]||presets['Fondu noir'];studioEditSettings.transition=p.transition;studioEditSettings.transitionMs=p.transitionMs;
  resetStudioRendered();renderStudioStoryboard();
  if($('stEditSummary'))$('stEditSummary').textContent='Transition appliquée : '+p.label+'. Elle sera visible dans le prochain rendu vidéo.';
+ if($('stTransitionSummary'))$('stTransitionSummary').textContent='Transition actuelle : '+p.label+'.';
+ if($('stTransitionsToggle'))$('stTransitionsToggle').textContent='🎞 Transition : '+p.transition;
  document.querySelectorAll('[data-st-transition]').forEach(function(b){b.classList.toggle('active',b.dataset.stTransition===p.transition)});
  toast('Transition '+p.transition+' appliquée.');
 }
@@ -345,6 +347,8 @@ function updateStudioProductionUI(){
  if($('stRenderPanel'))$('stRenderPanel').hidden=!video;
  if($('stDurationWrap'))$('stDurationWrap').hidden=!video;
  if($('stEditVideo'))$('stEditVideo').hidden=!video;
+ if($('stTransitionsToggle'))$('stTransitionsToggle').hidden=!video;
+ if(!video&&$('stTransitionPanel'))$('stTransitionPanel').hidden=true;
  renderStudioAssets();
 }
 function updateStudioAssetSelectionState(list){
@@ -380,6 +384,8 @@ function renderStudioStoryboard(){
  $('stStoryboardMeta').textContent=assets.length?assets.length+' média'+(assets.length>1?'s':'')+' • '+studioChannelProfile(channel,production):'Sélectionnez des médias';
  if($('stDurationSummary'))$('stDurationSummary').textContent=production==='Montage vidéo'?'Durée cible : '+studioFormatSeconds(timeline.targetMs)+' • transition : '+timeline.transition:'';
  document.querySelectorAll('[data-st-transition]').forEach(function(b){b.classList.toggle('active',b.dataset.stTransition===studioEditSettings.transition)});
+ if($('stTransitionsToggle'))$('stTransitionsToggle').textContent='🎞 Transition : '+studioEditSettings.transition;
+ if($('stTransitionSummary'))$('stTransitionSummary').textContent='Transition actuelle : '+studioEditSettings.transition+(timeline&&timeline.transitionMs?' • '+studioFormatSeconds(timeline.transitionMs):'')+'.';
  if(!assets.length){
   $('stStoryboard').innerHTML='<div class="empty">Le '+(production==='Article'?'plan éditorial':'montage proposé')+' apparaîtra ici à partir des médias sélectionnés.</div>';
   return;
@@ -998,7 +1004,7 @@ async function deleteAssets(ids){
 function bind(){
  document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>openView(b.dataset.view));document.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openView(b.dataset.open));
  document.querySelectorAll('[data-training-tab]').forEach(b=>b.onclick=()=>openTrainingTab(b.dataset.trainingTab));
- $('stGenerate').onclick=function(){$('stText').value=studioTemplate($('stPilot').value,$('stType').value,$('stEvent').value.trim(),$('stObjective').value.trim(),$('stTone').value,selectedAssets(),$('stChannel').value);renderStudioStoryboard();toast('Proposition Studio créée.')};$('stSave').onclick=saveStudio;$('stSearch').oninput=renderStudio;$('stAssetSearch').oninput=renderStudioAssets;$('stSelectAll').onclick=function(){const list=visibleStudioAssets(),all=list.length>0&&list.every(function(x){return studioSelected.has(x.id)});list.forEach(function(x){all?studioSelected.delete(x.id):studioSelected.add(x.id)});resetStudioRendered();renderStudioAssets()};$('stEditVideo').onclick=function(){$('stEditPanel').hidden=!$('stEditPanel').hidden};document.querySelectorAll('[data-st-transition]').forEach(function(b){b.onclick=function(){setStudioTransitionPreset(b.dataset.stTransition)}});$('stApplyEdits').onclick=applyStudioEdits;$('stDuration').onchange=function(){studioClipDurationsMs={};resetStudioRendered();renderStudioStoryboard();$('stText').value=studioTemplate($('stPilot').value,$('stType').value,$('stEvent').value.trim(),$('stObjective').value.trim(),$('stTone').value,selectedAssets(),$('stChannel').value)};$('stRenderVideo').onclick=generateStudioVideo;$('stCancelRender').onclick=cancelStudioVideoRender;$('stSaveRender').onclick=saveStudioRenderToLibrary;$('stType').onchange=function(){studioSelected.clear();studioClipDurationsMs={};resetStudioRendered();resetStudioEditSettings();updateStudioProductionUI()};$('stChannel').onchange=function(){resetStudioRendered();updateStudioProductionUI();renderStudioStoryboard()};
+ $('stGenerate').onclick=function(){$('stText').value=studioTemplate($('stPilot').value,$('stType').value,$('stEvent').value.trim(),$('stObjective').value.trim(),$('stTone').value,selectedAssets(),$('stChannel').value);renderStudioStoryboard();toast('Proposition Studio créée.')};$('stSave').onclick=saveStudio;$('stSearch').oninput=renderStudio;$('stAssetSearch').oninput=renderStudioAssets;$('stSelectAll').onclick=function(){const list=visibleStudioAssets(),all=list.length>0&&list.every(function(x){return studioSelected.has(x.id)});list.forEach(function(x){all?studioSelected.delete(x.id):studioSelected.add(x.id)});resetStudioRendered();renderStudioAssets()};$('stEditVideo').onclick=function(){$('stEditPanel').hidden=!$('stEditPanel').hidden};$('stTransitionsToggle').onclick=function(){$('stTransitionPanel').hidden=!$('stTransitionPanel').hidden};document.querySelectorAll('[data-st-transition]').forEach(function(b){b.onclick=function(){setStudioTransitionPreset(b.dataset.stTransition)}});$('stApplyEdits').onclick=applyStudioEdits;$('stDuration').onchange=function(){studioClipDurationsMs={};resetStudioRendered();renderStudioStoryboard();$('stText').value=studioTemplate($('stPilot').value,$('stType').value,$('stEvent').value.trim(),$('stObjective').value.trim(),$('stTone').value,selectedAssets(),$('stChannel').value)};$('stRenderVideo').onclick=generateStudioVideo;$('stCancelRender').onclick=cancelStudioVideoRender;$('stSaveRender').onclick=saveStudioRenderToLibrary;$('stType').onchange=function(){studioSelected.clear();studioClipDurationsMs={};resetStudioRendered();resetStudioEditSettings();updateStudioProductionUI()};$('stChannel').onchange=function(){resetStudioRendered();updateStudioProductionUI();renderStudioStoryboard()};
  $('repDate').value=today();$('repGenerate').onclick=()=>{$('repText').value=reportTemplate($('repPilot').value,$('repType').value,$('repEvent').value.trim(),$('repFacts').value.trim());toast('Trame générée.')};$('repSave').onclick=saveReport;$('repSearch').oninput=renderReports;
  $('trStart').onclick=newQuestion;$('trEvaluate').onclick=evaluate;$('trMic').onclick=startMic;$('trStop').onclick=stopMic;
  $('cultureNext').onclick=nextCulture;if($('cultureLevel'))$('cultureLevel').onchange=()=>{D.culture.level=$('cultureLevel').value;cultureIndex=0;save();renderCultureThemes();if(cultureTheme)showCultureQuestion()};$('enStart').onclick=startEnglish;$('enListen').onclick=listenEnglish;$('enAnswer').onclick=answerEnglish;$('enEnd').onclick=endEnglish;
