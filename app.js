@@ -22,6 +22,9 @@ let studioRenderedUrl='';
 let studioRenderedName='';
 let studioEditSettings={transition:'Fondu noir',transitionMs:420,pace:'normal',introMs:null,outroMs:null,notes:''};
 let studioStoryPlayTimer=null;
+let studioStoryPlayInterval=null;
+let studioClipDurationsMs={};
+let studioRenderCancelRequested=false;
 let cultureTheme='';
 let cultureIndex=0;
 let englishInterview=null;
@@ -116,14 +119,45 @@ function studioTimeline(assets){
   if(x.category==='Logo')return .55;
   return studioEditSettings.pace==='dynamic'?.78:1;
  });
- const weightSum=weights.reduce(function(a,b){return a+b},0)||1;
+ let fixed=0,flexWeight=0;
+ assets.forEach(function(x,i){
+  const manual=Number(studioClipDurationsMs[x.id]);
+  if(Number.isFinite(manual)&&manual>=300)fixed+=manual;else flexWeight+=weights[i];
+ });
+ const flexibleBudget=Math.max(0,budget-fixed);
  let used=0;
  const clips=assets.map(function(x,i){
-  const durationMs=i===assets.length-1?budget-used:Math.max(1,Math.round(budget*(weights[i]/weightSum)));
+  const manual=Number(studioClipDurationsMs[x.id]);let durationMs;
+  if(Number.isFinite(manual)&&manual>=300)durationMs=Math.round(manual);
+  else{
+   const share=flexWeight?weights[i]/flexWeight:0;
+   durationMs=Math.max(300,Math.round(flexibleBudget*share));
+  }
   used+=durationMs;
-  return {asset:x,durationMs:durationMs,role:studioRenderRole(i)};
+  return {asset:x,durationMs:durationMs,role:studioRenderRole(i),manual:Number.isFinite(manual)&&manual>=300};
  });
- return {targetMs:targetMs,introMs:intro,outroMs:outro,clips:clips,transition:studioEditSettings.transition,transitionMs:Math.min(studioEditSettings.transitionMs,Math.max(0,Math.floor((clips[0]?.durationMs||1000)/3)))};
+ if(clips.length){
+  const delta=budget-used;
+  const target=clips.slice().reverse().find(function(x){return !x.manual})||clips[clips.length-1];
+  target.durationMs=Math.max(300,target.durationMs+delta);
+ }
+ const totalClipMs=clips.reduce(function(sum,x){return sum+x.durationMs},0);
+ const actualTargetMs=intro+outro+totalClipMs;
+ return {targetMs:actualTargetMs,introMs:intro,outroMs:outro,clips:clips,transition:studioEditSettings.transition,transitionMs:Math.min(studioEditSettings.transitionMs,Math.max(0,Math.floor((clips[0]?.durationMs||1000)/3)))};
+}
+function studioSetClipDuration(id,seconds){
+ const assets=selectedAssets(),timeline=studioTimeline(assets),clip=timeline.clips.find(function(x){return x.asset.id===id});if(!clip)return;
+ const nextMs=Math.max(300,Math.min(120000,Math.round(Number(seconds)*1000)));if(!Number.isFinite(nextMs))return;
+ const delta=nextMs-clip.durationMs;studioClipDurationsMs[id]=nextMs;
+ const nextTotal=Math.max(5,Math.min(600,(timeline.targetMs+delta)/1000));$('stDuration').value=Math.round(nextTotal*10)/10;
+ resetStudioRendered();renderStudioStoryboard();
+ $('stText').value=studioTemplate($('stPilot').value,$('stType').value,$('stEvent').value.trim(),$('stObjective').value.trim(),$('stTone').value,selectedAssets(),$('stChannel').value);
+ if($('stEditSummary'))$('stEditSummary').textContent='Durée de la séquence modifiée à '+studioFormatSeconds(nextMs)+'. Nouvelle durée totale : '+studioFormatSeconds(Math.round(nextTotal*1000))+'.';
+ toast('Durée du plan mise à jour.');
+}
+function studioNudgeClipDuration(id,deltaMs){
+ const timeline=studioTimeline(selectedAssets()),clip=timeline.clips.find(function(x){return x.asset.id===id});if(!clip)return;
+ studioSetClipDuration(id,(clip.durationMs+deltaMs)/1000);
 }
 function resetStudioEditSettings(){
  studioEditSettings={transition:'Fondu noir',transitionMs:420,pace:'normal',introMs:null,outroMs:null,notes:''};
@@ -137,9 +171,9 @@ function parseStudioEditInstructions(text){
  const videoDuration=plain.match(/(?:video|montage|duree|format).{0,28}?(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes)\b/);
  const allTimes=[...plain.matchAll(/(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes)\b/g)];
  if(videoDuration){
-  const v=parseFloat(videoDuration[1].replace(',','.'));if(Number.isFinite(v)){$('stDuration').value=Math.max(5,Math.min(600,v));changed.push('durée '+studioTargetSeconds()+' s')}
+  const v=parseFloat(videoDuration[1].replace(',','.'));if(Number.isFinite(v)){studioClipDurationsMs={};$('stDuration').value=Math.max(5,Math.min(600,v));changed.push('durée '+studioTargetSeconds()+' s')}
  }else if(allTimes.length===1&&!/(intro|introduction|outro|conclusion|fin)/.test(plain)){
-  const v=parseFloat(allTimes[0][1].replace(',','.'));if(Number.isFinite(v)){$('stDuration').value=Math.max(5,Math.min(600,v));changed.push('durée '+studioTargetSeconds()+' s')}
+  const v=parseFloat(allTimes[0][1].replace(',','.'));if(Number.isFinite(v)){studioClipDurationsMs={};$('stDuration').value=Math.max(5,Math.min(600,v));changed.push('durée '+studioTargetSeconds()+' s')}
  }
  const intro=plain.match(/(?:intro|introduction).{0,22}?(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes)\b/);
  const outro=plain.match(/(?:outro|conclusion|fin).{0,22}?(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes)\b/);
@@ -189,7 +223,7 @@ function reorderStudioSequence(dragId,targetId){
 }
 function removeStudioSequence(id){
  if(!id||!studioSelected.has(id))return;
- stopStudioStoryboardPlayback();studioSelected.delete(id);resetStudioRendered();
+ stopStudioStoryboardPlayback();delete studioClipDurationsMs[id];studioSelected.delete(id);resetStudioRendered();
  renderStudioAssets();
  $('stText').value=studioTemplate($('stPilot').value,$('stType').value,$('stEvent').value.trim(),$('stObjective').value.trim(),$('stTone').value,selectedAssets(),$('stChannel').value);
  const remaining=studioSelected.size,target=studioTargetSeconds();
@@ -198,16 +232,32 @@ function removeStudioSequence(id){
 }
 function stopStudioStoryboardPlayback(){
  if(studioStoryPlayTimer){clearTimeout(studioStoryPlayTimer);studioStoryPlayTimer=null}
- document.querySelectorAll('.storyboard-card.playing').forEach(function(card){card.classList.remove('playing');const b=card.querySelector('[data-story-play]');if(b)b.textContent='▶ Lire'});
+ if(studioStoryPlayInterval){clearInterval(studioStoryPlayInterval);studioStoryPlayInterval=null}
+ document.querySelectorAll('.storyboard-card.playing').forEach(function(card){
+  card.classList.remove('playing');const b=card.querySelector('[data-story-play]');if(b)b.textContent='▶ Lire';
+  const progress=card.querySelector('.storyboard-preview-progress span');if(progress)progress.style.width='0%';
+ });
  document.querySelectorAll('.storyboard-card video').forEach(function(v){try{v.pause();v.currentTime=0;v.muted=true}catch(e){}});
 }
 function playStudioStoryboardItem(id,durationMs){
  const card=document.querySelector('[data-story-id="'+id+'"]');if(!card)return;
  const already=card.classList.contains('playing');stopStudioStoryboardPlayback();if(already)return;
- card.classList.add('playing');const btn=card.querySelector('[data-story-play]');if(btn)btn.textContent='■ Stop';
- const video=card.querySelector('video');
- if(video){video.loop=true;video.muted=false;video.currentTime=0;video.play().catch(function(){video.muted=true;video.play().catch(function(){})})}
- studioStoryPlayTimer=setTimeout(stopStudioStoryboardPlayback,Math.max(500,Number(durationMs)||2500));
+ const duration=Math.max(500,Number(durationMs)||2500),btn=card.querySelector('[data-story-play]'),video=card.querySelector('video'),progress=card.querySelector('.storyboard-preview-progress span');
+ card.classList.add('playing');
+ const started=performance.now();
+ function update(){
+  const elapsed=Math.min(duration,performance.now()-started),remaining=Math.max(0,(duration-elapsed)/1000);
+  if(btn)btn.textContent='■ Stop • '+remaining.toFixed(1)+' s';
+  if(progress)progress.style.width=Math.min(100,elapsed/duration*100)+'%';
+  if(video&&video.ended){try{video.currentTime=0;video.play().catch(function(){})}catch(e){}}
+ }
+ update();studioStoryPlayInterval=setInterval(update,80);
+ if(video){
+  video.loop=true;video.muted=false;
+  const startVideo=function(){try{video.currentTime=0}catch(e){};video.play().catch(function(){video.muted=true;video.play().catch(function(){})})};
+  if(video.readyState>=2)startVideo();else video.addEventListener('canplay',startVideo,{once:true});
+ }
+ studioStoryPlayTimer=setTimeout(stopStudioStoryboardPlayback,duration);
 }
 function studioTemplate(pilot,type,event,objective,tone,assets,channel){
  const production=normalizeStudioType(type),e=event||'Sujet à préciser',brief=(objective||'').trim()||'Aucun élément ajouté pour le moment.';
@@ -315,7 +365,7 @@ function studioStoryboardPreview(x){
   const blob=x.blob.type===type?x.blob:x.blob.slice(0,x.blob.size,type);
   const url=URL.createObjectURL(blob);studioStoryboardUrls.push(url);
   if(type.startsWith('image/'))return '<img src="'+url+'" alt="'+esc(x.name)+'">';
-  if(type.startsWith('video/'))return '<video src="'+url+'" muted playsinline preload="metadata" aria-label="'+esc(x.name)+'"></video>';
+  if(type.startsWith('video/'))return '<video src="'+url+'" muted playsinline preload="auto" aria-label="'+esc(x.name)+'"></video>';
  }catch(e){}
  return '<div class="storyboard-placeholder">'+esc(x.category||'Média')+'</div>';
 }
@@ -347,12 +397,17 @@ function renderStudioStoryboard(){
   }else timing=production==='Montage photo'?'Visuel '+(i+1):'Source '+(i+1);
   const play=production==='Montage vidéo'?'<button type="button" class="storyboard-play" data-story-play="'+x.id+'" data-story-duration="'+duration+'">▶ Lire</button>':'';
   const remove=production==='Montage vidéo'?'<button type="button" class="storyboard-remove" data-story-remove="'+x.id+'" title="Retirer cette séquence du montage">✕ Supprimer</button>':'';
+  const progress=production==='Montage vidéo'?'<div class="storyboard-preview-progress"><span></span></div>':'';
+  const controls=production==='Montage vidéo'?'<div class="storyboard-duration" data-duration-controls="'+x.id+'"><span>Durée</span><button type="button" data-duration-minus="'+x.id+'">−1 s</button><input type="number" min="0.3" max="120" step="0.1" value="'+(duration/1000).toFixed(1)+'" data-duration-input="'+x.id+'" aria-label="Durée de la séquence en secondes"><button type="button" data-duration-plus="'+x.id+'">+1 s</button></div>':'';
   const drag=production==='Montage vidéo'?' draggable="true" data-story-id="'+x.id+'"':'';
   const hint=production==='Montage vidéo'?'<small class="storyboard-drag-hint">Glisser l’image pour déplacer la séquence</small>':'';
-  return '<article class="storyboard-card"'+drag+'><div class="storyboard-media">'+studioStoryboardPreview(x)+play+remove+'</div><div class="storyboard-info"><span>'+esc(timing)+'</span><b>'+esc(role)+'</b><small>'+esc(x.name)+'</small>'+hint+'</div></article>';
+  return '<article class="storyboard-card"'+drag+'><div class="storyboard-media">'+studioStoryboardPreview(x)+progress+play+remove+'</div><div class="storyboard-info"><span>'+esc(timing)+'</span><b>'+esc(role)+'</b><small>'+esc(x.name)+'</small>'+controls+hint+'</div></article>';
  }).join('');
  document.querySelectorAll('[data-story-play]').forEach(function(b){b.onclick=function(e){e.preventDefault();e.stopPropagation();playStudioStoryboardItem(b.dataset.storyPlay,Number(b.dataset.storyDuration)||2500)}});
  document.querySelectorAll('[data-story-remove]').forEach(function(b){b.onclick=function(e){e.preventDefault();e.stopPropagation();removeStudioSequence(b.dataset.storyRemove)};b.onmousedown=function(e){e.stopPropagation()}});
+ document.querySelectorAll('[data-duration-minus]').forEach(function(b){b.onclick=function(e){e.preventDefault();e.stopPropagation();studioNudgeClipDuration(b.dataset.durationMinus,-1000)};b.onmousedown=function(e){e.stopPropagation()}});
+ document.querySelectorAll('[data-duration-plus]').forEach(function(b){b.onclick=function(e){e.preventDefault();e.stopPropagation();studioNudgeClipDuration(b.dataset.durationPlus,1000)};b.onmousedown=function(e){e.stopPropagation()}});
+ document.querySelectorAll('[data-duration-input]').forEach(function(inp){inp.onchange=function(e){e.stopPropagation();studioSetClipDuration(inp.dataset.durationInput,Number(inp.value))};inp.onmousedown=function(e){e.stopPropagation()};inp.ondragstart=function(e){e.preventDefault();e.stopPropagation()}});
  if(production==='Montage vidéo'){
   let dragId='';
   document.querySelectorAll('[data-story-id]').forEach(function(card){
@@ -370,7 +425,7 @@ function renderStudioAssets(){
  $('stAssetList').innerHTML=list.length?list.map(function(x){
   return '<label class="asset-check"><input type="checkbox" data-st-asset="'+x.id+'" '+(studioSelected.has(x.id)?'checked':'')+'><span><b>'+esc(x.name)+'</b><small>'+esc(x.category)+' • '+esc(x.pilot||'—')+' • '+sizeText(x.size||0)+'</small></span></label>';
  }).join(''):'<div class="empty">Aucun média compatible dans Library.</div>';
- document.querySelectorAll('[data-st-asset]').forEach(function(cb){cb.onchange=function(){cb.checked?studioSelected.add(cb.dataset.stAsset):studioSelected.delete(cb.dataset.stAsset);resetStudioRendered();updateStudioAssetSelectionState(list);renderStudioStoryboard()}});
+ document.querySelectorAll('[data-st-asset]').forEach(function(cb){cb.onchange=function(){cb.checked?studioSelected.add(cb.dataset.stAsset):(studioSelected.delete(cb.dataset.stAsset),delete studioClipDurationsMs[cb.dataset.stAsset]);resetStudioRendered();updateStudioAssetSelectionState(list);renderStudioStoryboard()}});
  renderStudioStoryboard();
 }
 
@@ -470,9 +525,19 @@ function drawStudioTransition(ctx,w,h,elapsed,duration){
  }
  ctx.fillStyle='rgba(0,0,0,'+Math.min(.96,alpha*.96)+')';ctx.fillRect(0,0,w,h);
 }
+function studioCheckRenderCancel(){
+ if(studioRenderCancelRequested){const e=new Error('Génération annulée');e.name='AbortError';throw e}
+}
+function cancelStudioVideoRender(){
+ if(!studioRenderBusy)return;
+ studioRenderCancelRequested=true;
+ if($('stCancelRender'))$('stCancelRender').disabled=true;
+ if($('stRenderStatus'))$('stRenderStatus').textContent='Annulation de la génération…';
+}
 async function studioRenderStatic(ctx,canvas,source,duration,meta,totalState,logo){
  const start=performance.now();
  while(performance.now()-start<duration){
+  studioCheckRenderCancel();
   const elapsed=Math.min(duration,performance.now()-start);drawStudioFrame(ctx,source,canvas.width,canvas.height,meta.role,meta.name,meta.pilot,meta.event,logo);drawStudioTransition(ctx,canvas.width,canvas.height,elapsed,duration);
   studioSetProgress(totalState.done+elapsed,totalState.total,'Génération du montage');
   await studioSleep(33);
@@ -506,6 +571,7 @@ async function studioRenderVideoAsset(ctx,canvas,x,index,duration,totalState,log
   try{await video.play()}catch(e){video.muted=true;await video.play()}
   const start=performance.now();
   while(performance.now()-start<duration){
+   studioCheckRenderCancel();
    const elapsed=Math.min(duration,performance.now()-start);
    drawStudioFrame(ctx,video,canvas.width,canvas.height,meta.role,meta.name,meta.pilot,meta.event,logo);drawStudioTransition(ctx,canvas.width,canvas.height,elapsed,duration);
    studioSetProgress(totalState.done+elapsed,totalState.total,'Génération du montage');
@@ -523,7 +589,7 @@ async function generateStudioVideo(){
  if(!assets.length)return toast('Sélectionnez au moins un média.');
  if(!window.MediaRecorder||!HTMLCanvasElement.prototype.captureStream)return toast('Ce navigateur ne permet pas encore le rendu vidéo local.');
  const mime=studioRenderMime();if(!mime)return toast('Aucun format vidéo exportable n’est disponible dans ce navigateur.');
- studioRenderBusy=true;resetStudioRendered();$('stRenderVideo').disabled=true;$('stSaveRender').disabled=true;
+ studioRenderBusy=true;studioRenderCancelRequested=false;resetStudioRendered();$('stRenderVideo').disabled=true;$('stSaveRender').disabled=true;if($('stCancelRender'))$('stCancelRender').disabled=false;
  const channel=$('stChannel').value,size=studioRenderSize(channel),canvas=document.createElement('canvas');canvas.width=size.w;canvas.height=size.h;
  const ctx=canvas.getContext('2d',{alpha:false}),fps=30,canvasStream=canvas.captureStream(fps);
  let audioCtx=null,audioDest=null;
@@ -540,11 +606,11 @@ async function generateStudioVideo(){
  try{
   recorder.start(1000);
   const introStart=performance.now();
-  while(performance.now()-introStart<timeline.introMs){drawStudioTitleCard(ctx,canvas.width,canvas.height,pilot,event,logo);studioSetProgress(Math.min(timeline.introMs,performance.now()-introStart),state.total,'Création de l’introduction');await studioSleep(33)}
+  while(performance.now()-introStart<timeline.introMs){studioCheckRenderCancel();drawStudioTitleCard(ctx,canvas.width,canvas.height,pilot,event,logo);studioSetProgress(Math.min(timeline.introMs,performance.now()-introStart),state.total,'Création de l’introduction');await studioSleep(33)}
   state.done+=timeline.introMs;
-  for(let i=0;i<assets.length;i++)await studioRenderVideoAsset(ctx,canvas,assets[i],i,timeline.clips[i].durationMs,state,logo,audioCtx,audioDest);
+  for(let i=0;i<assets.length;i++){studioCheckRenderCancel();await studioRenderVideoAsset(ctx,canvas,assets[i],i,timeline.clips[i].durationMs,state,logo,audioCtx,audioDest)}
   const outroStart=performance.now();
-  while(performance.now()-outroStart<timeline.outroMs){drawStudioTitleCard(ctx,canvas.width,canvas.height,'ROAD TO P1','Chaque tour construit la suite.',logo);studioSetProgress(state.done+Math.min(timeline.outroMs,performance.now()-outroStart),state.total,'Création de la conclusion');await studioSleep(33)}
+  while(performance.now()-outroStart<timeline.outroMs){studioCheckRenderCancel();drawStudioTitleCard(ctx,canvas.width,canvas.height,'ROAD TO P1','Chaque tour construit la suite.',logo);studioSetProgress(state.done+Math.min(timeline.outroMs,performance.now()-outroStart),state.total,'Création de la conclusion');await studioSleep(33)}
   state.done+=timeline.outroMs;recorder.stop();await stopped;
   const finalMime=recorder.mimeType||mime||'video/webm';studioRenderedBlob=new Blob(chunks,{type:finalMime});studioRenderedUrl=URL.createObjectURL(studioRenderedBlob);studioRenderedName=studioRenderFileName(finalMime);
   $('stRenderPreview').src=studioRenderedUrl;$('stRenderPreview').hidden=false;
@@ -552,10 +618,16 @@ async function generateStudioVideo(){
   $('stSaveRender').disabled=false;$('stRenderFormat').textContent=(finalMime.indexOf('mp4')>=0?'MP4':'WebM')+' • '+size.label+' • cible '+studioFormatSeconds(timeline.targetMs)+' • '+sizeText(studioRenderedBlob.size);
   studioSetProgress(state.total,state.total,'Montage terminé');log('Studio • vidéo générée localement • '+pilot+' • '+channel);save();toast('Vidéo générée.');
  }catch(e){
-  console.error(e);if(recorder&&recorder.state!=='inactive'){try{recorder.stop()}catch(_){}}
-  if($('stRenderStatus'))$('stRenderStatus').textContent='Le rendu a échoué : '+(e&&e.message?e.message:'erreur inconnue');toast('Impossible de terminer le rendu vidéo.');
+  if(recorder&&recorder.state!=='inactive'){try{recorder.stop()}catch(_){}}
+  if(e&&e.name==='AbortError'){
+   if($('stRenderStatus'))$('stRenderStatus').textContent='Génération annulée.';
+   if($('stRenderProgressBar'))$('stRenderProgressBar').style.width='0%';
+   toast('Génération annulée.');
+  }else{
+   console.error(e);if($('stRenderStatus'))$('stRenderStatus').textContent='Le rendu a échoué : '+(e&&e.message?e.message:'erreur inconnue');toast('Impossible de terminer le rendu vidéo.');
+  }
  }finally{
-  stream.getTracks().forEach(function(t){t.stop()});if(audioCtx){try{await audioCtx.close()}catch(e){}}studioRenderBusy=false;$('stRenderVideo').disabled=false;
+  stream.getTracks().forEach(function(t){t.stop()});if(audioCtx){try{await audioCtx.close()}catch(e){}}studioRenderBusy=false;studioRenderCancelRequested=false;$('stRenderVideo').disabled=false;if($('stCancelRender'))$('stCancelRender').disabled=true;
  }
 }
 async function saveStudioRenderToLibrary(){
@@ -580,12 +652,12 @@ function renderStudio(){
 function openStudioDraft(id){
  const x=D.studio.find(function(x){return x.id===id});if(!x)return;
  $('stPilot').value=x.pilot;$('stType').value=normalizeStudioType(x.type);$('stChannel').value=x.channel||(/facebook/i.test(x.type||'')?'Facebook':'Instagram');$('stEvent').value=x.event;$('stStatus').value=x.status;$('stTone').value=x.tone||'Sportif';$('stObjective').value=x.objective||'';$('stText').value=x.text||'';$('stDuration').value=x.duration||60;
- studioEditSettings=Object.assign({transition:'Fondu noir',transitionMs:420,pace:'normal',introMs:null,outroMs:null,notes:''},x.editSettings||{});$('stEditInstructions').value=x.editInstructions||studioEditSettings.notes||'';studioSelected=new Set(x.mediaIds||[]);$('stSave').dataset.edit=id;updateStudioProductionUI();toast('Production chargée.');window.scrollTo({top:0,behavior:'smooth'});
+ studioEditSettings=Object.assign({transition:'Fondu noir',transitionMs:420,pace:'normal',introMs:null,outroMs:null,notes:''},x.editSettings||{});studioClipDurationsMs=Object.assign({},x.clipDurationsMs||{});$('stEditInstructions').value=x.editInstructions||studioEditSettings.notes||'';studioSelected=new Set(x.mediaIds||[]);$('stSave').dataset.edit=id;updateStudioProductionUI();toast('Production chargée.');window.scrollTo({top:0,behavior:'smooth'});
 }
 function delStudioDraft(id){if(!confirm('Supprimer cette production Studio ?'))return;D.studio=D.studio.filter(function(x){return x.id!==id});log('Production Studio supprimée');save();renderStudio()}
 function saveStudio(){
  const id=$('stSave').dataset.edit||uid('s'),old=D.studio.find(function(x){return x.id===id});
- const x={id:id,pilot:$('stPilot').value,type:normalizeStudioType($('stType').value),channel:$('stChannel').value,event:$('stEvent').value.trim(),status:$('stStatus').value,tone:$('stTone').value,objective:$('stObjective').value.trim(),text:$('stText').value,duration:studioTargetSeconds(),editInstructions:$('stEditInstructions').value.trim(),editSettings:Object.assign({},studioEditSettings),mediaIds:[...studioSelected],created:old&&old.created||now(),updated:now()};
+ const x={id:id,pilot:$('stPilot').value,type:normalizeStudioType($('stType').value),channel:$('stChannel').value,event:$('stEvent').value.trim(),status:$('stStatus').value,tone:$('stTone').value,objective:$('stObjective').value.trim(),text:$('stText').value,duration:studioTargetSeconds(),editInstructions:$('stEditInstructions').value.trim(),editSettings:Object.assign({},studioEditSettings),clipDurationsMs:Object.assign({},studioClipDurationsMs),mediaIds:[...studioSelected],created:old&&old.created||now(),updated:now()};
  const i=D.studio.findIndex(function(x){return x.id===id});if(i>=0)D.studio[i]=x;else D.studio.unshift(x);
  log((i>=0?'Production Studio mise à jour':'Nouvelle production Studio')+' • '+x.pilot+' • '+x.type+' • '+x.channel);delete $('stSave').dataset.edit;save();renderStudio();toast('Production enregistrée.');
 }
@@ -926,7 +998,7 @@ async function deleteAssets(ids){
 function bind(){
  document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>openView(b.dataset.view));document.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openView(b.dataset.open));
  document.querySelectorAll('[data-training-tab]').forEach(b=>b.onclick=()=>openTrainingTab(b.dataset.trainingTab));
- $('stGenerate').onclick=function(){$('stText').value=studioTemplate($('stPilot').value,$('stType').value,$('stEvent').value.trim(),$('stObjective').value.trim(),$('stTone').value,selectedAssets(),$('stChannel').value);renderStudioStoryboard();toast('Proposition Studio créée.')};$('stSave').onclick=saveStudio;$('stSearch').oninput=renderStudio;$('stAssetSearch').oninput=renderStudioAssets;$('stSelectAll').onclick=function(){const list=visibleStudioAssets(),all=list.length>0&&list.every(function(x){return studioSelected.has(x.id)});list.forEach(function(x){all?studioSelected.delete(x.id):studioSelected.add(x.id)});resetStudioRendered();renderStudioAssets()};$('stEditVideo').onclick=function(){$('stEditPanel').hidden=!$('stEditPanel').hidden};document.querySelectorAll('[data-st-transition]').forEach(function(b){b.onclick=function(){setStudioTransitionPreset(b.dataset.stTransition)}});$('stApplyEdits').onclick=applyStudioEdits;$('stDuration').onchange=function(){resetStudioRendered();renderStudioStoryboard();$('stText').value=studioTemplate($('stPilot').value,$('stType').value,$('stEvent').value.trim(),$('stObjective').value.trim(),$('stTone').value,selectedAssets(),$('stChannel').value)};$('stRenderVideo').onclick=generateStudioVideo;$('stSaveRender').onclick=saveStudioRenderToLibrary;$('stType').onchange=function(){studioSelected.clear();resetStudioRendered();resetStudioEditSettings();updateStudioProductionUI()};$('stChannel').onchange=function(){resetStudioRendered();updateStudioProductionUI();renderStudioStoryboard()};
+ $('stGenerate').onclick=function(){$('stText').value=studioTemplate($('stPilot').value,$('stType').value,$('stEvent').value.trim(),$('stObjective').value.trim(),$('stTone').value,selectedAssets(),$('stChannel').value);renderStudioStoryboard();toast('Proposition Studio créée.')};$('stSave').onclick=saveStudio;$('stSearch').oninput=renderStudio;$('stAssetSearch').oninput=renderStudioAssets;$('stSelectAll').onclick=function(){const list=visibleStudioAssets(),all=list.length>0&&list.every(function(x){return studioSelected.has(x.id)});list.forEach(function(x){all?studioSelected.delete(x.id):studioSelected.add(x.id)});resetStudioRendered();renderStudioAssets()};$('stEditVideo').onclick=function(){$('stEditPanel').hidden=!$('stEditPanel').hidden};document.querySelectorAll('[data-st-transition]').forEach(function(b){b.onclick=function(){setStudioTransitionPreset(b.dataset.stTransition)}});$('stApplyEdits').onclick=applyStudioEdits;$('stDuration').onchange=function(){studioClipDurationsMs={};resetStudioRendered();renderStudioStoryboard();$('stText').value=studioTemplate($('stPilot').value,$('stType').value,$('stEvent').value.trim(),$('stObjective').value.trim(),$('stTone').value,selectedAssets(),$('stChannel').value)};$('stRenderVideo').onclick=generateStudioVideo;$('stCancelRender').onclick=cancelStudioVideoRender;$('stSaveRender').onclick=saveStudioRenderToLibrary;$('stType').onchange=function(){studioSelected.clear();studioClipDurationsMs={};resetStudioRendered();resetStudioEditSettings();updateStudioProductionUI()};$('stChannel').onchange=function(){resetStudioRendered();updateStudioProductionUI();renderStudioStoryboard()};
  $('repDate').value=today();$('repGenerate').onclick=()=>{$('repText').value=reportTemplate($('repPilot').value,$('repType').value,$('repEvent').value.trim(),$('repFacts').value.trim());toast('Trame générée.')};$('repSave').onclick=saveReport;$('repSearch').oninput=renderReports;
  $('trStart').onclick=newQuestion;$('trEvaluate').onclick=evaluate;$('trMic').onclick=startMic;$('trStop').onclick=stopMic;
  $('cultureNext').onclick=nextCulture;if($('cultureLevel'))$('cultureLevel').onchange=()=>{D.culture.level=$('cultureLevel').value;cultureIndex=0;save();renderCultureThemes();if(cultureTheme)showCultureQuestion()};$('enStart').onclick=startEnglish;$('enListen').onclick=listenEnglish;$('enAnswer').onclick=answerEnglish;$('enEnd').onclick=endEnglish;
