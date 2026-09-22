@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#080b10">
 <title>ROAD TO P1 Media — V2.2</title>
-<link rel="stylesheet" href="style.css?v=222">
+<link rel="stylesheet" href="style.css?v=223">
 </head>
 <body>
 <div class="app">
@@ -77,10 +77,15 @@
           <div class="panel-head"><h3>Sources Library</h3><span id="stAssetCount">0 sélectionné</span></div>
           <div class="panel-body picker-body">
             <input class="search" id="stAssetSearch" placeholder="Rechercher les médias à utiliser...">
+            <div class="studio-asset-selection"><button class="btn" id="stSelectAll">Tout sélectionner</button><span id="stVisibleCount">0 média affiché</span></div>
             <p class="file-note" id="stAssetHint">Pour un article, vous pouvez sélectionner photos, vidéos, documents ou logos comme éléments de référence.</p>
             <div id="stAssetList" class="asset-picker-list"></div>
           </div>
         </div>
+      </div>
+      <div class="panel studio-storyboard-panel">
+        <div class="panel-head"><h3 id="stStoryboardTitle">Pré-montage proposé</h3><span id="stStoryboardMeta">Sélectionnez des médias</span></div>
+        <div class="panel-body"><div id="stStoryboard" class="studio-storyboard"><div class="empty">Le montage proposé apparaîtra ici à partir des médias sélectionnés.</div></div></div>
       </div>
       <div class="panel history-panel"><div class="panel-head"><h3>Productions Studio</h3><span id="stCount">0 production</span></div><div class="panel-body"><input class="search" id="stSearch" placeholder="Rechercher une production..."><div id="stList" class="stack-list top-gap"></div></div></div>
     </section>
@@ -211,6 +216,6 @@
   </main>
 </div>
 <div class="toast" id="toast"></div>
-<script src="app.js?v=222"></script>
+<script src="app.js?v=223"></script>
 </body>
 </html>

@@ -15,6 +15,7 @@ let studioSelected=new Set();
 let currentQuestion='';
 let recognition=null;
 let previewUrl='';
+let studioStoryboardUrls=[];
 let cultureTheme='';
 let cultureIndex=0;
 let englishInterview=null;
@@ -143,7 +144,17 @@ function studioTemplate(pilot,type,event,objective,tone,assets,channel){
   'La suite se construit désormais autour du prochain rendez-vous, avec la même ambition : apprendre, progresser et transformer chaque expérience en étape vers le haut niveau.'
  ].join('\n');
 }
-function selectedAssets(){return libraryCache.filter(function(x){return studioSelected.has(x.id)})}
+function selectedAssets(){
+ return [...studioSelected].map(function(id){return libraryCache.find(function(x){return x.id===id})}).filter(Boolean);
+}
+function visibleStudioAssets(){
+ const q=($('stAssetSearch')&&$('stAssetSearch').value||'').toLowerCase();
+ const production=normalizeStudioType($('stType')&&$('stType').value||'Article');
+ return libraryCache.filter(function(x){
+  const compatible=production==='Montage vidéo'?['Vidéo','Photo','Logo'].includes(x.category):production==='Montage photo'?['Photo','Logo'].includes(x.category):true;
+  return compatible&&(!q||[x.name,x.pilot,x.event,x.tags,x.category].join(' ').toLowerCase().includes(q));
+ });
+}
 function updateStudioProductionUI(){
  const production=normalizeStudioType($('stType')&&$('stType').value||'Article');
  if($('stType'))$('stType').value=production;
@@ -154,18 +165,58 @@ function updateStudioProductionUI(){
  if($('stAssetHint'))$('stAssetHint').textContent=article?'Pour un article, vous pouvez sélectionner photos, vidéos, documents ou logos comme éléments de référence.':video?'Studio affiche les vidéos, photos et logos disponibles pour construire le montage.':'Studio affiche les photos et logos disponibles pour construire la sélection.';
  renderStudioAssets();
 }
-function renderStudioAssets(){
- const q=($('stAssetSearch')&&$('stAssetSearch').value||'').toLowerCase();
- const production=normalizeStudioType($('stType')&&$('stType').value||'Article');
- const list=libraryCache.filter(function(x){
-  const compatible=production==='Montage vidéo'?['Vidéo','Photo','Logo'].includes(x.category):production==='Montage photo'?['Photo','Logo'].includes(x.category):true;
-  return compatible&&(!q||[x.name,x.pilot,x.event,x.tags,x.category].join(' ').toLowerCase().includes(q));
- });
+function updateStudioAssetSelectionState(list){
+ list=list||visibleStudioAssets();
+ const all=list.length>0&&list.every(function(x){return studioSelected.has(x.id)});
+ if($('stSelectAll')){$('stSelectAll').textContent=all?'Tout désélectionner':'Tout sélectionner';$('stSelectAll').disabled=!list.length}
+ if($('stVisibleCount'))$('stVisibleCount').textContent=list.length+' média'+(list.length>1?'s':'')+' affiché'+(list.length>1?'s':'');
  $('stAssetCount').textContent=studioSelected.size+' sélectionné'+(studioSelected.size>1?'s':'');
+}
+function clearStudioStoryboardUrls(){
+ studioStoryboardUrls.forEach(function(url){try{URL.revokeObjectURL(url)}catch(e){}});
+ studioStoryboardUrls=[];
+}
+function studioStoryboardPreview(x){
+ if(!(x&&x.blob instanceof Blob))return '<div class="storyboard-placeholder">'+esc(x&&x.category||'Média')+'</div>';
+ const type=mediaType(x);
+ try{
+  const blob=x.blob.type===type?x.blob:x.blob.slice(0,x.blob.size,type);
+  const url=URL.createObjectURL(blob);studioStoryboardUrls.push(url);
+  if(type.startsWith('image/'))return '<img src="'+url+'" alt="'+esc(x.name)+'">';
+  if(type.startsWith('video/'))return '<video src="'+url+'" muted playsinline preload="metadata" aria-label="'+esc(x.name)+'"></video>';
+ }catch(e){}
+ return '<div class="storyboard-placeholder">'+esc(x.category||'Média')+'</div>';
+}
+function renderStudioStoryboard(){
+ if(!$('stStoryboard'))return;
+ clearStudioStoryboardUrls();
+ const production=normalizeStudioType($('stType')&&$('stType').value||'Article');
+ const channel=$('stChannel')&&$('stChannel').value||'Instagram';
+ const assets=selectedAssets();
+ const title=production==='Article'?'Sources proposées pour l’article':'Pré-montage proposé';
+ $('stStoryboardTitle').textContent=title;
+ $('stStoryboardMeta').textContent=assets.length?assets.length+' média'+(assets.length>1?'s':'')+' • '+studioChannelProfile(channel,production):'Sélectionnez des médias';
+ if(!assets.length){
+  $('stStoryboard').innerHTML='<div class="empty">Le '+(production==='Article'?'plan éditorial':'montage proposé')+' apparaîtra ici à partir des médias sélectionnés.</div>';
+  return;
+ }
+ const videoRoles=['Accroche / action forte','Contexte / paddock','Séquence piste','Moment clé','Pilote / émotion','Partenaires / conclusion'];
+ const photoRoles=['Couverture','Action piste','Détail / préparation','Pilote / émotion','Équipe / coulisses','Partenaires'];
+ const articleRoles=['Illustration principale','Contexte','Preuve / détail','Citation ou ambiance','Partenaires','Conclusion'];
+ $('stStoryboard').innerHTML=assets.map(function(x,i){
+  const role=(production==='Montage vidéo'?videoRoles:production==='Montage photo'?photoRoles:articleRoles)[i%6];
+  const timing=production==='Montage vidéo'?String(i*4).padStart(2,'0')+'–'+String((i+1)*4).padStart(2,'0')+' s':production==='Montage photo'?'Visuel '+(i+1):'Source '+(i+1);
+  return '<article class="storyboard-card"><div class="storyboard-media">'+studioStoryboardPreview(x)+'</div><div class="storyboard-info"><span>'+esc(timing)+'</span><b>'+esc(role)+'</b><small>'+esc(x.name)+'</small></div></article>';
+ }).join('');
+}
+function renderStudioAssets(){
+ const list=visibleStudioAssets();
+ updateStudioAssetSelectionState(list);
  $('stAssetList').innerHTML=list.length?list.map(function(x){
   return '<label class="asset-check"><input type="checkbox" data-st-asset="'+x.id+'" '+(studioSelected.has(x.id)?'checked':'')+'><span><b>'+esc(x.name)+'</b><small>'+esc(x.category)+' • '+esc(x.pilot||'—')+' • '+sizeText(x.size||0)+'</small></span></label>';
  }).join(''):'<div class="empty">Aucun média compatible dans Library.</div>';
- document.querySelectorAll('[data-st-asset]').forEach(function(cb){cb.onchange=function(){cb.checked?studioSelected.add(cb.dataset.stAsset):studioSelected.delete(cb.dataset.stAsset);$('stAssetCount').textContent=studioSelected.size+' sélectionné'+(studioSelected.size>1?'s':'')}});
+ document.querySelectorAll('[data-st-asset]').forEach(function(cb){cb.onchange=function(){cb.checked?studioSelected.add(cb.dataset.stAsset):studioSelected.delete(cb.dataset.stAsset);updateStudioAssetSelectionState(list);renderStudioStoryboard()}});
+ renderStudioStoryboard();
 }
 function renderStudio(){
  const q=($('stSearch')&&$('stSearch').value||'').toLowerCase();
@@ -527,7 +578,7 @@ async function deleteAssets(ids){
 function bind(){
  document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>openView(b.dataset.view));document.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openView(b.dataset.open));
  document.querySelectorAll('[data-training-tab]').forEach(b=>b.onclick=()=>openTrainingTab(b.dataset.trainingTab));
- $('stGenerate').onclick=function(){$('stText').value=studioTemplate($('stPilot').value,$('stType').value,$('stEvent').value.trim(),$('stObjective').value.trim(),$('stTone').value,selectedAssets(),$('stChannel').value);toast('Proposition Studio créée.')};$('stSave').onclick=saveStudio;$('stSearch').oninput=renderStudio;$('stAssetSearch').oninput=renderStudioAssets;$('stType').onchange=function(){studioSelected.clear();updateStudioProductionUI()};$('stChannel').onchange=updateStudioProductionUI;
+ $('stGenerate').onclick=function(){$('stText').value=studioTemplate($('stPilot').value,$('stType').value,$('stEvent').value.trim(),$('stObjective').value.trim(),$('stTone').value,selectedAssets(),$('stChannel').value);renderStudioStoryboard();toast('Proposition Studio créée.')};$('stSave').onclick=saveStudio;$('stSearch').oninput=renderStudio;$('stAssetSearch').oninput=renderStudioAssets;$('stSelectAll').onclick=function(){const list=visibleStudioAssets(),all=list.length>0&&list.every(function(x){return studioSelected.has(x.id)});list.forEach(function(x){all?studioSelected.delete(x.id):studioSelected.add(x.id)});renderStudioAssets()};$('stType').onchange=function(){studioSelected.clear();updateStudioProductionUI()};$('stChannel').onchange=function(){updateStudioProductionUI();renderStudioStoryboard()};
  $('repDate').value=today();$('repGenerate').onclick=()=>{$('repText').value=reportTemplate($('repPilot').value,$('repType').value,$('repEvent').value.trim(),$('repFacts').value.trim());toast('Trame générée.')};$('repSave').onclick=saveReport;$('repSearch').oninput=renderReports;
  $('trStart').onclick=newQuestion;$('trEvaluate').onclick=evaluate;$('trMic').onclick=startMic;$('trStop').onclick=stopMic;
  $('cultureNext').onclick=nextCulture;if($('cultureLevel'))$('cultureLevel').onchange=()=>{D.culture.level=$('cultureLevel').value;cultureIndex=0;save();renderCultureThemes();if(cultureTheme)showCultureQuestion()};$('enStart').onclick=startEnglish;$('enListen').onclick=listenEnglish;$('enAnswer').onclick=answerEnglish;$('enEnd').onclick=endEnglish;
@@ -538,7 +589,7 @@ function bind(){
  $('libSearch').oninput=filterLibrary;$('libTypeFilter').onchange=filterLibrary;$('libSort').onchange=renderLibrary;
  $('libSelectAll').onclick=()=>{const list=visibleLibrary(),all=list.every(x=>librarySelected.has(x.id));list.forEach(x=>all?librarySelected.delete(x.id):librarySelected.add(x.id));updateLibrarySelection()};
  $('libDeleteSelected').onclick=()=>deleteAssets([...librarySelected]);
- window.addEventListener('beforeunload',()=>{if(previewUrl)URL.revokeObjectURL(previewUrl)});
+ window.addEventListener('beforeunload',()=>{if(previewUrl)URL.revokeObjectURL(previewUrl);clearStudioStoryboardUrls()});
 
 }
 
