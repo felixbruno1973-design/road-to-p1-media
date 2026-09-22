@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#080b10">
 <title>ROAD TO P1 Media — V2.2</title>
-<link rel="stylesheet" href="style.css?v=220">
+<link rel="stylesheet" href="style.css?v=221">
 </head>
 <body>
 <div class="app">
@@ -175,13 +175,12 @@
     <section class="view" id="view-library">
       <div class="section-grid library-grid">
         <div class="panel form-panel">
-          <div class="panel-head"><h3>Ajouter à Library</h3><span>Local ou Cloud R2 multi-appareils</span></div>
+          <div class="panel-head"><h3>Ajouter à Library</h3><span>Fichiers conservés sur cet appareil</span></div>
           <div class="panel-body form-grid">
-            <div class="span2 cloud-config"><div id="cloudState" class="cloud-state"></div><details><summary>Configurer la synchronisation cloud</summary><div class="cloud-fields"><label>URL API Cloud<input id="cloudApi" placeholder="https://...workers.dev"></label><label>Clé d’accès<input id="cloudToken" type="password" autocomplete="off" placeholder="Clé privée de votre Library"></label><div class="actions span2"><button type="button" class="btn" id="cloudLocal">Rester en local</button><button type="button" class="btn primary" id="cloudSave">Activer le cloud</button></div></div></details></div>
             <label class="span2 upload-zone">Fichiers<input type="file" id="libFiles" multiple accept="image/*,video/*,.pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.webp,.mp4,.mov"></label>
             <label>Pilote<select id="libPilot"><option>ROAD TO P1</option><option>Lara</option><option>Aaron</option><option>Commun</option></select></label>
             <label>Catégorie<select id="libCategory"><option>Automatique</option><option>Photo</option><option>Vidéo</option><option>Logo</option><option>Document</option></select></label>
-            <label class="span2">Événement / dossier<input id="libEvent" placeholder="Ex. Anneville 2026, Partenaires, Identité visuelle..."></label>
+            <label class="span2">Événement / dossier<input id="libEvent" list="libFolderOptions" placeholder="Ex. Anneville 2026, Partenaires, Identité visuelle..."><datalist id="libFolderOptions"></datalist></label>
             <label>Date<input type="date" id="libDate"></label>
             <label>Tags<input id="libTags" placeholder="podium, paddock, casque, sponsor..."></label>
             <div class="file-note span2" id="libFileNote">Aucun fichier sélectionné.</div>
@@ -191,7 +190,7 @@
         <div class="panel library-browser">
           <div class="panel-head"><h3>Bibliothèque</h3><span id="libStats">0 fichier</span></div>
           <div class="panel-body">
-            <div class="library-tools"><input class="search" id="libSearch" placeholder="Rechercher nom, pilote, événement, tag..."><select id="libTypeFilter"><option value="">Tous</option><option>Photo</option><option>Vidéo</option><option>Logo</option><option>Document</option></select></div>
+            <div id="libFolderList" class="library-folders" aria-label="Dossiers"></div><h4 id="libFolderTitle">Tous les dossiers</h4><div class="library-tools"><input class="search" id="libSearch" placeholder="Rechercher nom, pilote, événement, tag..."><select id="libTypeFilter" aria-label="Filtrer par type"><option value="">Tous</option><option>Photo</option><option>Vidéo</option><option>Logo</option><option>Document</option></select><select id="libSort" aria-label="Trier les fichiers"><option value="date-desc">Date : plus récents</option><option value="date-asc">Date : plus anciens</option><option value="name">Nom : A à Z</option><option value="type">Type de fichier</option><option value="size">Taille décroissante</option><option value="pilot">Pilote</option></select></div><div class="library-selection"><button class="btn" id="libSelectAll">Tout sélectionner</button><span id="libSelectionCount" aria-live="polite">0 sélectionné(s)</span><button class="btn danger" id="libDeleteSelected" disabled>Supprimer la sélection</button></div><p class="file-note">La sélection porte sur les fichiers affichés. Le tri s’applique dans chaque dossier.</p>
             <div id="libList" class="library-list top-gap"></div>
           </div>
         </div>
@@ -203,6 +202,6 @@
   </main>
 </div>
 <div class="toast" id="toast"></div>
-<script src="app.js?v=220"></script>
+<script src="app.js?v=221"></script>
 </body>
 </html>

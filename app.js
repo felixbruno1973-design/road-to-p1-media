@@ -329,78 +329,109 @@ async function dbAll(){const db=await openDb();return new Promise((resolve,rejec
 async function dbPut(x){const db=await openDb();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).put(x);tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error)})}
 async function dbRemove(id){const db=await openDb();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).delete(id);tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error)})}
 function categoryFor(file,chosen){if(chosen&&chosen!=='Automatique')return chosen;if(file.type.startsWith('image/'))return 'Photo';if(file.type.startsWith('video/'))return 'Vidéo';return 'Document'}
-const CLOUD_API_KEY='roadToP1MediaCloudApi';
-const CLOUD_TOKEN_KEY='roadToP1MediaCloudToken';
-function cloudConfig(){return {api:(localStorage.getItem(CLOUD_API_KEY)||'').replace(/\/$/,''),token:localStorage.getItem(CLOUD_TOKEN_KEY)||''}}
-function cloudEnabled(){const c=cloudConfig();return !!(c.api&&c.token)}
-async function cloudFetch(path,options={}){
- const c=cloudConfig();if(!c.api||!c.token)throw new Error('Cloud non configuré');
- const headers=new Headers(options.headers||{});headers.set('Authorization','Bearer '+c.token);
- const r=await fetch(c.api+path,{...options,headers});if(!r.ok)throw new Error((await r.text().catch(()=>''))||('HTTP '+r.status));return r;
-}
-async function cloudUploadFile(file,meta){
- const chunkSize=8*1024*1024;
- const start=await cloudFetch('/library/multipart/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...meta,name:file.name,type:file.type||'application/octet-stream',size:file.size,lastModified:file.lastModified})});
- const session=await start.json(),parts=[];let partNumber=1;
- for(let offset=0;offset<file.size;offset+=chunkSize){
-  const chunk=file.slice(offset,Math.min(file.size,offset+chunkSize));
-  const r=await cloudFetch(`/library/multipart/part?key=${encodeURIComponent(session.key)}&uploadId=${encodeURIComponent(session.uploadId)}&partNumber=${partNumber}`,{method:'PUT',headers:{'Content-Type':'application/octet-stream'},body:chunk});
-  parts.push(await r.json());partNumber++;
-  if($('libFileNote'))$('libFileNote').textContent=`Envoi cloud • ${file.name} • ${Math.min(100,Math.round(Math.min(file.size,offset+chunkSize)/file.size*100))}%`;
- }
- await cloudFetch('/library/multipart/complete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:session.key,uploadId:session.uploadId,parts,meta:{...meta,id:session.id,name:file.name,type:file.type||'application/octet-stream',size:file.size,lastModified:file.lastModified}})});
-}
-function renderCloudStatus(){
- if(!$('cloudState'))return;const c=cloudConfig(),on=cloudEnabled();
- $('cloudState').innerHTML=on?'<i class="cloud-dot online"></i><b>Cloud R2 connecté</b><span>Bibliothèque partagée entre les appareils</span>':'<i class="cloud-dot"></i><b>Mode local</b><span>Les fichiers restent uniquement sur cet appareil</span>';
- if($('cloudApi'))$('cloudApi').value=c.api;if($('cloudToken'))$('cloudToken').value=c.token;
-}
-function saveCloudConfig(){
- const api=($('cloudApi')?.value||'').trim().replace(/\/$/,'');
- const token=($('cloudToken')?.value||'').trim();
- if(api)localStorage.setItem(CLOUD_API_KEY,api);else localStorage.removeItem(CLOUD_API_KEY);
- if(token)localStorage.setItem(CLOUD_TOKEN_KEY,token);else localStorage.removeItem(CLOUD_TOKEN_KEY);
- renderCloudStatus();refreshLibrary();toast(api&&token?'Cloud activé.':'Mode local activé.');
-}
 
+const librarySelected=new Set();
+let libraryFolder=null,libraryBusy=false,previewAssetId='';
+const folderName=x=>(x.event||'').trim()||'Sans dossier';
+function mediaType(x){
+ const type=x.type||x.blob?.type||'';
+ if(type&&type!=='application/octet-stream')return type;
+ const ext=(x.name||'').split('.').pop().toLowerCase();
+ return ({mp4:'video/mp4',m4v:'video/mp4',mov:'video/quicktime',webm:'video/webm',ogv:'video/ogg',jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',webp:'image/webp',gif:'image/gif',pdf:'application/pdf'})[ext]||type;
+}
+function visibleLibrary(){
+ const q=($('libSearch')?.value||'').toLocaleLowerCase('fr'),type=$('libTypeFilter')?.value||'';
+ const list=libraryCache.filter(x=>(libraryFolder===null||folderName(x)===libraryFolder)&&(!type||x.category===type)&&(!q||[x.name,x.pilot,x.event,x.tags,x.category].join(' ').toLocaleLowerCase('fr').includes(q)));
+ const sort=$('libSort')?.value||'date-desc',compare=(a,b)=>String(a||'').localeCompare(String(b||''),'fr',{numeric:true,sensitivity:'base'});
+ const date=x=>Date.parse(x.date||x.created)||Number(x.lastModified)||0;
+ return list.sort((a,b)=>{
+  let n=sort==='date-asc'?date(a)-date(b):sort==='name'?compare(a.name,b.name):sort==='type'?compare(a.category,b.category):sort==='size'?Number(b.size||0)-Number(a.size||0):sort==='pilot'?compare(a.pilot,b.pilot):date(b)-date(a);
+  return n||compare(a.name,b.name)||compare(a.id,b.id);
+ });
+}
 async function refreshLibrary(){
- try{
-  if(cloudEnabled()){
-   const r=await cloudFetch('/library');libraryCache=(await r.json()).items||[];libraryCache=libraryCache.map(x=>({...x,storage:'cloud'}));
-  }else libraryCache=(await dbAll()).sort((a,b)=>(b.created||'').localeCompare(a.created||''));
-  renderLibrary();renderStudioAssets();renderHome();renderCloudStatus();
- }catch(e){console.error(e);libraryCache=(await dbAll().catch(()=>[])).sort((a,b)=>(b.created||'').localeCompare(a.created||''));renderLibrary();renderStudioAssets();renderHome();renderCloudStatus();toast('Cloud indisponible : Library locale affichée.')}
+ try{libraryCache=await dbAll();for(const id of librarySelected)if(!libraryCache.some(x=>x.id===id))librarySelected.delete(id);renderLibrary();renderStudioAssets();renderHome()}
+ catch(e){console.error(e);toast('Impossible de lire la bibliothèque locale.')}
 }
 async function addLibraryFiles(){
- const files=[...($('libFiles').files||[])];if(!files.length)return toast('Sélectionnez au moins un fichier.');
- $('libSave').disabled=true;
+ const files=[...$('libFiles').files];if(!files.length)return toast('Sélectionnez au moins un fichier.');
+ $('libSave').disabled=true;let added=0;
  try{
   for(const file of files){
-   const meta={pilot:$('libPilot').value,category:categoryFor(file,$('libCategory').value),event:$('libEvent').value.trim(),date:$('libDate').value,tags:$('libTags').value.trim(),created:now()};
-   if(cloudEnabled())await cloudUploadFile(file,meta);else await dbPut({id:uid('a'),name:file.name,type:file.type||'application/octet-stream',size:file.size,lastModified:file.lastModified,...meta,blob:file});
+   const type=mediaType(file)||'application/octet-stream';
+   await dbPut({id:uid('a'),name:file.name,type,size:file.size,lastModified:file.lastModified,pilot:$('libPilot').value,category:categoryFor({type},$('libCategory').value),event:$('libEvent').value.trim(),date:$('libDate').value,tags:$('libTags').value.trim(),created:now(),blob:file});added++;
   }
-  log(`Library • ${files.length} fichier${files.length>1?'s':''} ajouté${files.length>1?'s':''}${cloudEnabled()?' au cloud':''}`);save();$('libFiles').value='';$('libFileNote').textContent='Aucun fichier sélectionné.';await refreshLibrary();toast(cloudEnabled()?'Ajouté au cloud Library.':'Ajouté à Library.');
- }catch(e){console.error(e);toast('Impossible d’enregistrer ces fichiers.')}finally{$('libSave').disabled=false}
+  $('libFiles').value='';$('libFileNote').textContent='Aucun fichier sélectionné.';toast('Ajouté à Library.');
+ }catch(e){console.error(e);toast('Import interrompu. Vérifiez l’espace disponible sur cet appareil.')}
+ finally{if(added){log('Library • '+added+' fichier(s) ajouté(s)');save()}await refreshLibrary();$('libSave').disabled=false}
+}
+function updateLibrarySelection(){
+ const list=visibleLibrary(),all=list.length>0&&list.every(x=>librarySelected.has(x.id));
+ $('libSelectAll').textContent=all?'Tout désélectionner':'Tout sélectionner';
+ $('libSelectAll').disabled=libraryBusy||!list.length;
+ $('libDeleteSelected').disabled=libraryBusy||!librarySelected.size;
+ $('libSelectionCount').textContent=librarySelected.size+' sélectionné(s)';
+ document.querySelectorAll('[data-lib-select]').forEach(b=>{b.checked=librarySelected.has(b.dataset.libSelect);b.disabled=libraryBusy});
 }
 function renderLibrary(){
  if(!$('libList'))return;
- const q=($('libSearch')?.value||'').toLowerCase(),type=$('libTypeFilter')?.value||'',L=libraryCache.filter(x=>(!type||x.category===type)&&(!q||[x.name,x.pilot,x.event,x.tags,x.category].join(' ').toLowerCase().includes(q)));
- const total=libraryCache.reduce((n,x)=>n+(Number(x.size)||0),0);$('libStats').textContent=`${libraryCache.length} fichier${libraryCache.length>1?'s':''} • ${sizeText(total)} • ${cloudEnabled()?'cloud':'local'}`;
- $('libList').innerHTML=L.length?L.map(x=>`<div class="library-item"><div class="file-icon">${x.category==='Photo'?'▧':x.category==='Vidéo'?'▶':x.category==='Logo'?'◆':'▤'}</div><div><h4>${esc(x.name)}</h4><div class="list-meta">${esc(x.category)} • ${esc(x.pilot||'—')} • ${sizeText(Number(x.size)||0)} • ${x.storage==='cloud'?'<span class="cloud-label">CLOUD</span>':'LOCAL'}</div><p>${esc(x.event||'Sans dossier')}${x.tags?` • ${esc(x.tags)}`:''}</p></div><div class="mini-actions"><button data-lib-open="${x.id}">Aperçu</button><button class="danger" data-lib-del="${x.id}">Supprimer</button></div></div>`).join(''):'<div class="empty">Aucun fichier correspondant.</div>';
- document.querySelectorAll('[data-lib-open]').forEach(b=>b.onclick=()=>previewAsset(b.dataset.libOpen));document.querySelectorAll('[data-lib-del]').forEach(b=>b.onclick=()=>deleteAsset(b.dataset.libDel));
+ const folders=[...new Set(libraryCache.map(folderName))].sort((a,b)=>a.localeCompare(b,'fr',{numeric:true}));
+ if(libraryFolder!==null&&!folders.includes(libraryFolder))libraryFolder=null;
+ $('libFolderList').innerHTML='<button type="button" class="folder-button '+(libraryFolder===null?'active':'')+'" data-folder-all>Tous les dossiers <span>'+libraryCache.length+'</span></button>'+folders.map((name,i)=>'<button type="button" class="folder-button '+(libraryFolder===name?'active':'')+'" data-folder-index="'+i+'">▣ '+esc(name)+' <span>'+libraryCache.filter(x=>folderName(x)===name).length+'</span></button>').join('');
+ $('libFolderOptions').innerHTML=folders.filter(x=>x!=='Sans dossier').map(x=>'<option value="'+esc(x)+'"></option>').join('');
+ document.querySelector('[data-folder-all]').onclick=()=>{libraryFolder=null;librarySelected.clear();renderLibrary()};
+ document.querySelectorAll('[data-folder-index]').forEach(b=>b.onclick=()=>{libraryFolder=folders[Number(b.dataset.folderIndex)];librarySelected.clear();renderLibrary()});
+ const list=visibleLibrary(),total=libraryCache.reduce((n,x)=>n+Number(x.size||0),0);
+ $('libStats').textContent=libraryCache.length+' fichier(s) • '+sizeText(total)+' • local';
+ $('libFolderTitle').textContent=libraryFolder===null?'Tous les dossiers':libraryFolder;
+ const groups=new Map();
+ for(const x of list){const name=folderName(x);if(!groups.has(name))groups.set(name,[]);groups.get(name).push(x)}
+ $('libList').innerHTML=list.length?[...groups].map(([name,items])=>'<section class="library-folder"><h4 class="folder-heading">▣ '+esc(name)+' <small>'+items.length+' fichier(s)</small></h4>'+items.map(x=>'<div class="library-item"><input type="checkbox" class="library-select" data-lib-select="'+esc(x.id)+'" aria-label="Sélectionner '+esc(x.name)+'"><div class="file-icon">'+(x.category==='Photo'?'▧':x.category==='Vidéo'?'▶':x.category==='Logo'?'◆':'▤')+'</div><div class="file-info"><h4>'+esc(x.name)+'</h4><div class="list-meta">'+esc(x.category)+' • '+esc(x.pilot||'—')+' • '+sizeText(Number(x.size)||0)+' • '+fd(x.date||x.created)+'</div><p>'+esc(x.tags||'')+'</p></div><div class="mini-actions"><button data-lib-open="'+esc(x.id)+'">Aperçu</button><button class="danger" data-lib-del="'+esc(x.id)+'" '+(libraryBusy?'disabled':'')+'>Supprimer</button></div></div>').join('')+'</section>').join(''):'<div class="empty">Aucun fichier correspondant.</div>';
+ document.querySelectorAll('[data-lib-open]').forEach(b=>b.onclick=()=>previewAsset(b.dataset.libOpen));
+ document.querySelectorAll('[data-lib-del]').forEach(b=>b.onclick=()=>deleteAssets([b.dataset.libDel]));
+ document.querySelectorAll('[data-lib-select]').forEach(b=>b.onchange=()=>{b.checked?librarySelected.add(b.dataset.libSelect):librarySelected.delete(b.dataset.libSelect);updateLibrarySelection()});
+ updateLibrarySelection();
+}
+function clearLibraryPreview(){
+ const player=$('libPreview').querySelector('video');if(player){player.pause();player.removeAttribute('src');player.load()}
+ if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl='';previewAssetId='';
+ $('libPreviewMeta').textContent='Sélectionnez un média';$('libPreview').innerHTML='<div class="empty">Aucun média sélectionné.</div>';
 }
 async function previewAsset(id){
- const x=libraryCache.find(x=>x.id===id);if(!x)return;if(previewUrl)URL.revokeObjectURL(previewUrl);
+ const x=libraryCache.find(x=>x.id===id);if(!x)return;
+ clearLibraryPreview();previewAssetId=id;
+ $('libPreviewMeta').textContent=x.name+' • '+x.category+' • '+sizeText(Number(x.size)||0);
+ const panel=$('libPreview').closest('.library-preview-panel');panel.scrollIntoView({behavior:'smooth',block:'start'});
  try{
-  if(x.storage==='cloud'){const r=await cloudFetch('/library/'+encodeURIComponent(id)+'/content');previewUrl=URL.createObjectURL(await r.blob())}else previewUrl=URL.createObjectURL(x.blob);
-  $('libPreviewMeta').textContent=`${x.name} • ${x.category} • ${sizeText(Number(x.size)||0)} • ${x.storage==='cloud'?'Cloud R2':'local'}`;
-  let html;if((x.type||'').startsWith('image/'))html=`<img src="${previewUrl}" alt="${esc(x.name)}">`;else if((x.type||'').startsWith('video/'))html=`<video src="${previewUrl}" controls playsinline></video>`;else html=`<div class="document-preview"><b>${esc(x.name)}</b><span>${esc(x.type||'Document')}</span><small>${sizeText(Number(x.size)||0)}</small></div>`;
-  $('libPreview').innerHTML=html;
- }catch(e){console.error(e);toast('Impossible de charger ce média.')}
+  if(!(x.blob instanceof Blob))throw new Error('Fichier absent');
+  const type=mediaType(x);previewUrl=URL.createObjectURL(x.blob.type===type?x.blob:x.blob.slice(0,x.blob.size,type));
+  const download='<a class="btn" href="'+previewUrl+'" download="'+esc(x.name)+'">Télécharger / ouvrir le fichier</a>';
+  let html=type.startsWith('image/')?'<img src="'+previewUrl+'" alt="'+esc(x.name)+'">':type.startsWith('video/')?'<video src="'+previewUrl+'" controls playsinline preload="metadata" aria-label="'+esc(x.name)+'"></video>':type==='application/pdf'?'<iframe title="'+esc(x.name)+'" src="'+previewUrl+'"></iframe>':'<div class="document-preview"><b>'+esc(x.name)+'</b><span>'+esc(type||'Document')+'</span></div>';
+  $('libPreview').innerHTML=html+'<p id="libPreviewHint" role="status"></p>'+download;
+  const player=$('libPreview').querySelector('video');
+  if(player){
+   const hint=$('libPreviewHint');
+   player.onerror=()=>{hint.textContent='Ce format ou codec vidéo ne peut pas être lu dans ce navigateur. Téléchargez le fichier pour l’ouvrir avec votre lecteur vidéo.'};
+   try{await player.play()}catch(e){if(previewAssetId===id&&!player.error)hint.textContent='Appuyez sur ▶ dans le lecteur pour lancer la vidéo.'}
+  }
+ }catch(e){console.error(e);$('libPreview').innerHTML='<div class="empty">Le fichier local est introuvable ou illisible. Réimportez-le depuis cet appareil.</div>'}
 }
-async function deleteAsset(id){
- const x=libraryCache.find(x=>x.id===id);if(!x||!confirm(`Supprimer « ${x.name} » de Library ?`))return;
- try{if(x.storage==='cloud')await cloudFetch('/library/'+encodeURIComponent(id),{method:'DELETE'});else await dbRemove(id);studioSelected.delete(id);log(`Library • ${x.name} supprimé`);save();await refreshLibrary();$('libPreviewMeta').textContent='Sélectionnez un média';$('libPreview').innerHTML='<div class="empty">Aucun média sélectionné.</div>';toast('Média supprimé.')}catch(e){console.error(e);toast('Suppression impossible.')}
+async function dbRemoveMany(ids){
+ const db=await openDb();
+ return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readwrite');for(const id of ids)tx.objectStore(STORE).delete(id);tx.oncomplete=()=>{db.close();resolve()};tx.onerror=tx.onabort=()=>{db.close();reject(tx.error||new Error('Suppression annulée'))}});
+}
+async function deleteAssets(ids){
+ if(libraryBusy)return;
+ const items=libraryCache.filter(x=>ids.includes(x.id));if(!items.length)return;
+ if(!confirm('Supprimer définitivement '+(items.length===1?'« '+items[0].name+' »':items.length+' fichiers sélectionnés')+' de Library sur cet appareil ?'))return;
+ libraryBusy=true;renderLibrary();
+ try{
+  await dbRemoveMany(items.map(x=>x.id));
+  for(const x of items){librarySelected.delete(x.id);studioSelected.delete(x.id)}
+  if(items.some(x=>x.id===previewAssetId))clearLibraryPreview();
+  log('Library • '+items.length+' fichier(s) supprimé(s)');save();await refreshLibrary();toast(items.length+' fichier(s) supprimé(s).');
+ }catch(e){console.error(e);toast('Suppression impossible. Les fichiers ont été conservés.')}
+ finally{libraryBusy=false;renderLibrary()}
 }
 
 function bind(){
@@ -410,7 +441,15 @@ function bind(){
  $('repDate').value=today();$('repGenerate').onclick=()=>{$('repText').value=reportTemplate($('repPilot').value,$('repType').value,$('repEvent').value.trim(),$('repFacts').value.trim());toast('Trame générée.')};$('repSave').onclick=saveReport;$('repSearch').oninput=renderReports;
  $('trStart').onclick=newQuestion;$('trEvaluate').onclick=evaluate;$('trMic').onclick=startMic;$('trStop').onclick=stopMic;
  $('cultureNext').onclick=nextCulture;if($('cultureLevel'))$('cultureLevel').onchange=()=>{D.culture.level=$('cultureLevel').value;cultureIndex=0;save();renderCultureThemes();if(cultureTheme)showCultureQuestion()};$('enStart').onclick=startEnglish;$('enListen').onclick=listenEnglish;$('enAnswer').onclick=answerEnglish;$('enEnd').onclick=endEnglish;
- $('libDate').value=today();renderCloudStatus();if($('cloudSave'))$('cloudSave').onclick=saveCloudConfig;if($('cloudLocal'))$('cloudLocal').onclick=()=>{$('cloudApi').value='';$('cloudToken').value='';saveCloudConfig()};$('libFiles').onchange=()=>{$('libFileNote').textContent=$('libFiles').files.length?[...$('libFiles').files].map(f=>`${f.name} (${sizeText(f.size)})`).join(' • '):'Aucun fichier sélectionné.'};$('libSave').onclick=addLibraryFiles;$('libSearch').oninput=renderLibrary;$('libTypeFilter').onchange=renderLibrary;
+ $('libDate').value=today();
+ $('libFiles').onchange=()=>{$('libFileNote').textContent=$('libFiles').files.length?[...$('libFiles').files].map(f=>f.name+' ('+sizeText(f.size)+')').join(' • '):'Aucun fichier sélectionné.'};
+ $('libSave').onclick=addLibraryFiles;
+ const filterLibrary=()=>{librarySelected.clear();renderLibrary()};
+ $('libSearch').oninput=filterLibrary;$('libTypeFilter').onchange=filterLibrary;$('libSort').onchange=renderLibrary;
+ $('libSelectAll').onclick=()=>{const list=visibleLibrary(),all=list.every(x=>librarySelected.has(x.id));list.forEach(x=>all?librarySelected.delete(x.id):librarySelected.add(x.id));updateLibrarySelection()};
+ $('libDeleteSelected').onclick=()=>deleteAssets([...librarySelected]);
+ window.addEventListener('beforeunload',()=>{if(previewUrl)URL.revokeObjectURL(previewUrl)});
+
 }
 
 async function init(){load();bind();renderHome();renderStudio();renderReports();renderTraining();loadOfficialLogo();await refreshLibrary()}
