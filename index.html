@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#080b10">
-<title>ROAD TO P1 Media — V2.0</title>
-<link rel="stylesheet" href="style.css?v=200">
+<title>ROAD TO P1 Media — V2.1</title>
+<link rel="stylesheet" href="style.css?v=210">
 </head>
 <body>
 <div class="app">
@@ -13,7 +13,7 @@
     <div class="brand">
       <img id="officialLogo" class="official-logo" alt="ROAD TO P1">
       <div class="product">MEDIA</div>
-      <div class="version">V2.0</div>
+      <div class="version">V2.1</div>
     </div>
     <nav class="nav">
       <button class="active" data-view="home"><span>⌂</span>Accueil</button>
@@ -28,7 +28,7 @@
   <main class="main">
     <header class="topbar">
       <div><div class="eyebrow">ROAD TO P1 • MEDIA</div><h1 id="pageTitle">Media Center</h1><p id="pageSubtitle">Créer, structurer, entraîner et conserver.</p></div>
-      <div class="top-actions"><span class="status"><i></i>Media V2.0</span></div>
+      <div class="top-actions"><span class="status"><i></i>Media V2.1</span></div>
     </header>
 
     <section class="view active" id="view-home">
@@ -96,6 +96,23 @@
     </section>
 
     <section class="view" id="view-training">
+      <div class="training-intro panel">
+        <div><span class="kicker">PARCOURS MEDIA TRAINING</span><h2>Apprendre. S’entraîner. Comprendre. Oser parler.</h2><p>Un parcours complet pour préparer Lara et Aaron à représenter ROAD TO P1 avec clarté, culture et confiance, en français comme en anglais.</p></div>
+        <div class="training-progress"><b id="trainingProgress">0%</b><span>progression du parcours</span></div>
+      </div>
+      <div class="training-tabs" role="tablist" aria-label="Parcours Media Training">
+        <button class="active" data-training-tab="learning">01 <span>Les bases de la communication</span></button>
+        <button data-training-tab="practice">02 <span>Simulations médias</span></button>
+        <button data-training-tab="culture">03 <span>Culture automobile</span></button>
+        <button data-training-tab="english">04 <span>Improve Your English</span></button>
+      </div>
+
+      <div class="training-pane active" id="training-learning">
+        <div class="learning-grid" id="learningModules"></div>
+        <div class="panel lesson-panel" id="lessonPanel"><div class="empty">Choisissez une leçon pour commencer.</div></div>
+      </div>
+
+      <div class="training-pane" id="training-practice">
       <div class="training-layout">
         <div class="panel training-setup">
           <div class="panel-head"><h3>Session</h3><span>Préparer l’interview</span></div>
@@ -116,6 +133,38 @@
         </div>
       </div>
       <div class="panel training-history"><div class="panel-head"><h3>Historique d’entraînement</h3><span id="trCount">0 session</span></div><div class="panel-body"><div id="trList" class="stack-list"></div></div></div>
+      </div>
+
+      <div class="training-pane" id="training-culture">
+        <div class="culture-layout">
+          <div class="panel culture-menu"><div class="panel-head"><h3>Choisir un thème</h3><span>Histoire & compétition</span></div><div class="panel-body" id="cultureThemes"></div></div>
+          <div class="panel culture-quiz">
+            <div class="question-head"><span id="cultureBadge">CULTURE AUTOMOBILE</span><small id="cultureScore">0 bonne réponse</small></div>
+            <div class="question" id="cultureQuestion">Choisissez un thème pour commencer.</div>
+            <div class="quiz-options" id="cultureOptions"></div>
+            <div class="quiz-feedback" id="cultureFeedback"></div>
+            <button class="btn primary" id="cultureNext" disabled>Question suivante</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="training-pane" id="training-english">
+        <div class="english-layout">
+          <div class="panel english-setup"><div class="panel-head"><h3>Interview setup</h3><span>Voice practice</span></div><div class="panel-body form-grid onecol">
+            <label>Driver<select id="enPilot"><option>Lara</option><option>Aaron</option></select></label>
+            <label>Level<select id="enLevel"><option value="starter">Starter</option><option value="racing">Racing Driver</option><option value="pro">Professional Interview</option></select></label>
+            <label>Situation<select id="enScenario"><option value="pre">Before the race</option><option value="post">After the race</option><option value="podium">On the podium</option><option value="difficult">A difficult weekend</option><option value="partner">Meeting a partner</option></select></label>
+            <button class="btn primary" id="enStart">Start voice interview</button>
+          </div></div>
+          <div class="panel english-conversation">
+            <div class="conversation-status"><span><i id="enStatusDot"></i><b id="enStatus">Ready</b></span><small>English journalist • UK</small></div>
+            <div class="conversation-log" id="enConversation"><div class="speech journalist"><b>Journalist</b><p>Choose your level and start the interview.</p></div></div>
+            <div class="conversation-actions"><button class="btn" id="enListen">▶ Hear the question again</button><button class="btn primary" id="enAnswer">🎙 Answer</button><button class="btn" id="enEnd">End interview</button></div>
+            <div class="voice-hint" id="enHint">The browser microphone and voice synthesis are used for this preview.</div>
+          </div>
+        </div>
+        <div class="panel english-summary" id="enSummary"><div class="empty">Your interview summary will appear here.</div></div>
+      </div>
     </section>
 
     <section class="view" id="view-library">
@@ -144,10 +193,10 @@
       <div class="panel library-preview-panel"><div class="panel-head"><h3>Aperçu</h3><span id="libPreviewMeta">Sélectionnez un média</span></div><div id="libPreview" class="library-preview"><div class="empty">Aucun média sélectionné.</div></div></div>
     </section>
 
-    <footer>ROAD TO P1 Media • V2.0</footer>
+    <footer>ROAD TO P1 Media • V2.1</footer>
   </main>
 </div>
 <div class="toast" id="toast"></div>
-<script src="app.js?v=200"></script>
+<script src="app.js?v=210"></script>
 </body>
 </html>
