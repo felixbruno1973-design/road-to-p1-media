@@ -27,6 +27,7 @@ let studioClipDurationsMs={};
 let studioRenderCancelRequested=false;
 let cultureTheme='';
 let cultureIndex=0;
+let cultureShuffleSeed=Math.floor(Math.random()*1000000000);
 let englishInterview=null;
 let englishRecognition=null;
 
@@ -39,6 +40,8 @@ function load(){
   D.culture.correct=Number(D.culture.correct)||0;
   D.culture.total=Number(D.culture.total)||0;
   D.culture.level=['confirmed','expert','pro'].includes(D.culture.level)?D.culture.level:'pro';
+  D.culture.mode=['progression','review','random'].includes(D.culture.mode)?D.culture.mode:'progression';
+  D.culture.subtheme=typeof D.culture.subtheme==='string'?D.culture.subtheme:'';
   D.culture.byTheme=D.culture.byTheme&&typeof D.culture.byTheme==='object'?D.culture.byTheme:{};
   D.culture.mastery=D.culture.mastery&&typeof D.culture.mastery==='object'?D.culture.mastery:{};
   D.culture.history=Array.isArray(D.culture.history)?D.culture.history:[];
@@ -800,6 +803,17 @@ const CULTURE={
  }
 };
 
+const CULTURE_PACK=window.RTP1_CULTURE_V24||{questions:{},curriculum:{},targetPerTheme:200};
+const CULTURE_TARGET_PER_THEME=Number(CULTURE_PACK.targetPerTheme)||200;
+Object.entries(CULTURE_PACK.questions||{}).forEach(([theme,questions])=>{
+ if(!CULTURE[theme]||!Array.isArray(questions))return;
+ const seen=new Set((CULTURE[theme].questions||[]).map(q=>q.id));
+ questions.forEach(q=>{if(q&&q.id&&!seen.has(q.id)){CULTURE[theme].questions.push(q);seen.add(q.id)}});
+ const meta=CULTURE_PACK.curriculum?.[theme]||{};
+ CULTURE[theme].subthemes=Array.isArray(meta.subthemes)?meta.subthemes:[];
+ CULTURE[theme].target=Number(meta.target)||CULTURE_TARGET_PER_THEME;
+});
+
 const ENGLISH_QUESTIONS={
  starter:{pre:['Hello! Can you introduce yourself and tell me what you are racing today?','What is your main goal for this race?','What do you enjoy most about karting?'],post:['How was your race today?','What did you learn?','Who would you like to thank?'],podium:['How do you feel after this result?','What was the key moment of your race?','What is your next goal?'],difficult:['It was a difficult day. What happened?','What positive lesson can you take from today?','How will you prepare for the next race?'],partner:['Can you introduce ROAD TO P1?','Why are partners important to your project?','What would you like to say to them?']},
  racing:{pre:['How have you prepared for this race weekend?','What will be the biggest technical challenge today?','What result would make this a successful weekend?'],post:['Talk me through the most important moment of your race.','Where did you make the biggest step forward this weekend?','What will you work on before the next event?'],podium:['How did you manage the pressure in the closing laps?','What made the difference today?','How important was your team in achieving this result?'],difficult:['The result did not meet your expectations. How do you assess the weekend?','Was there anything you could have done differently?','How do you turn disappointment into progress?'],partner:['How does partner support improve your sporting programme?','What values do you share with ROAD TO P1 partners?','How could a company become part of your journey?']},
@@ -820,48 +834,91 @@ function cultureMasteryCount(theme,level=D.culture.level){
 function cultureOverallMastery(){
  return Object.keys(CULTURE).reduce((a,t)=>{const m=cultureMasteryCount(t);a.done+=m.done;a.total+=m.total;return a},{done:0,total:0});
 }
-function updateTrainingProgress(){const lessonPart=D.learning.length/LESSONS.length*50,practicePart=Math.min(D.training.length,5)/5*25,m=cultureOverallMastery(),culturePart=m.total?m.done/m.total*15:0,englishPart=Math.min(D.english.length,2)/2*10;$('trainingProgress').textContent=`${Math.round(lessonPart+practicePart+culturePart+englishPart)}%`}
+function cultureBankCount(){return Object.values(CULTURE).reduce((n,t)=>n+(t.questions?.length||0),0)}
+function cultureTargetTotal(){return Object.values(CULTURE).reduce((n,t)=>n+(Number(t.target)||CULTURE_TARGET_PER_THEME),0)}
+function cultureSubthemes(theme){
+ const explicit=CULTURE[theme]?.subthemes||[];
+ if(explicit.length)return explicit;
+ return [...new Set((CULTURE[theme]?.questions||[]).map(q=>q.subtheme).filter(Boolean))];
+}
+function cultureHash(str){
+ let h=2166136261;
+ for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619)}
+ return h>>>0;
+}
+function updateTrainingProgress(){
+ const lessonPart=D.learning.length/LESSONS.length*50,practicePart=Math.min(D.training.length,5)/5*25,m=cultureOverallMastery(),culturePart=m.total?m.done/m.total*15:0,englishPart=Math.min(D.english.length,2)/2*10;
+ $('trainingProgress').textContent=`${Math.round(lessonPart+practicePart+culturePart+englishPart)}%`;
+}
+function renderCultureSubthemes(theme){
+ const el=$('cultureSubtheme');if(!el)return;
+ if(!theme){el.innerHTML='<option value="">Tous les sous-thèmes</option>';el.disabled=true;return}
+ const subs=cultureSubthemes(theme),wanted=D.culture.subtheme||'';
+ el.disabled=false;
+ el.innerHTML='<option value="">Tous les sous-thèmes</option>'+subs.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');
+ if(wanted&&subs.includes(wanted))el.value=wanted;else{el.value='';D.culture.subtheme=''}
+}
 function getCultureQuestions(theme){
  const level=$('cultureLevel')?.value||D.culture.level||'pro';
- D.culture.level=level;
- return (CULTURE[theme]?.questions||[]).filter(q=>CULTURE_LEVELS[q.level]<=CULTURE_LEVELS[level]);
+ const mode=$('cultureMode')?.value||D.culture.mode||'progression';
+ const subtheme=$('cultureSubtheme')?.value||D.culture.subtheme||'';
+ D.culture.level=level;D.culture.mode=mode;D.culture.subtheme=subtheme;
+ let qs=(CULTURE[theme]?.questions||[]).filter(q=>CULTURE_LEVELS[q.level]<=CULTURE_LEVELS[level]);
+ if(subtheme)qs=qs.filter(q=>(q.subtheme||'Fondamentaux')===subtheme);
+ const mastered=D.culture.mastery?.[theme]||{};
+ if(mode==='review'){
+  const wrongIds=[];
+  (D.culture.history||[]).forEach(h=>{if(h.theme===theme&&h.correct===false&&!wrongIds.includes(h.id))wrongIds.push(h.id)});
+  const wrong=wrongIds.map(id=>qs.find(q=>q.id===id)).filter(Boolean);
+  if(wrong.length)return wrong;
+  return qs.slice().sort((a,b)=>(mastered[a.id]?1:0)-(mastered[b.id]?1:0)||a.id.localeCompare(b.id));
+ }
+ if(mode==='random')return qs.slice().sort((a,b)=>cultureHash(a.id+':'+cultureShuffleSeed)-cultureHash(b.id+':'+cultureShuffleSeed));
+ return qs.slice().sort((a,b)=>(mastered[a.id]?1:0)-(mastered[b.id]?1:0)||a.id.localeCompare(b.id));
 }
 function renderCultureThemes(){
  if($('cultureLevel'))$('cultureLevel').value=D.culture.level||'pro';
- $('cultureThemes').innerHTML=Object.entries(CULTURE).map(([id,t])=>{const m=cultureMasteryCount(id);return `<button class="culture-theme ${cultureTheme===id?'active':''}" data-culture-theme="${id}"><span>◉</span><b>${esc(t.label)}</b><small>${m.done}/${m.total} maîtrisées</small></button>`}).join('');
+ if($('cultureMode'))$('cultureMode').value=D.culture.mode||'progression';
+ $('cultureThemes').innerHTML=Object.entries(CULTURE).map(([id,t])=>{
+  const m=cultureMasteryCount(id);
+  return `<button class="culture-theme ${cultureTheme===id?'active':''}" data-culture-theme="${id}"><span>◉</span><b>${esc(t.label)}</b><small>${m.done}/${m.total} maîtrisées • ${t.questions.length} fiches</small></button>`;
+ }).join('');
  document.querySelectorAll('[data-culture-theme]').forEach(b=>b.onclick=()=>startCulture(b.dataset.cultureTheme));
- const all=cultureOverallMastery();
+ renderCultureSubthemes(cultureTheme);
+ const all=cultureOverallMastery(),bank=cultureBankCount(),target=cultureTargetTotal();
  $('cultureScore').textContent=`${all.done}/${all.total} notions maîtrisées`;
- if($('cultureStats'))$('cultureStats').innerHTML=`<b>${all.total?Math.round(all.done/all.total*100):0}%</b><span>maîtrise globale • niveau ${D.culture.level==='confirmed'?'confirmé':D.culture.level==='expert'?'expert':'pro'}</span><small>${D.culture.total||0} réponses données</small>`;
+ if($('cultureStats'))$('cultureStats').innerHTML=`<b>${all.total?Math.round(all.done/all.total*100):0}%</b><span>maîtrise globale • niveau ${D.culture.level==='confirmed'?'confirmé':D.culture.level==='expert'?'expert':'pro'}</span><small>${bank} fiches disponibles • cible ≈ ${target}</small>`;
 }
-function startCulture(theme){cultureTheme=theme;cultureIndex=0;renderCultureThemes();showCultureQuestion()}
+function startCulture(theme){
+ cultureTheme=theme;cultureIndex=0;cultureShuffleSeed=Math.floor(Math.random()*1000000000);D.culture.subtheme='';renderCultureThemes();renderCultureSubthemes(theme);showCultureQuestion();
+}
 function showCultureQuestion(){
- const qs=getCultureQuestions(cultureTheme),q=qs[cultureIndex%Math.max(1,qs.length)];if(!q)return;
- const theme=CULTURE[cultureTheme],m=cultureMasteryCount(cultureTheme);
- $('cultureBadge').textContent=`${theme.label.toUpperCase()} • ${q.level.toUpperCase()}`;
- $('cultureQuestion').innerHTML=`<span class="culture-question-count">QUESTION ${cultureIndex%qs.length+1}/${qs.length} • ${m.done} NOTION${m.done>1?'S':''} MAÎTRISÉE${m.done>1?'S':''}</span>${esc(q.q)}`;
+ const qs=getCultureQuestions(cultureTheme);
+ if(!qs.length){
+  $('cultureBadge').textContent='CULTURE AUTOMOBILE';
+  $('cultureQuestion').innerHTML='<span class="culture-question-count">AUCUNE FICHE POUR CE FILTRE</span>Choisissez un autre niveau, sous-thème ou mode.';
+  $('cultureOptions').innerHTML='';$('cultureFeedback').innerHTML='';$('cultureNext').disabled=true;return;
+ }
+ const q=qs[cultureIndex%qs.length],theme=CULTURE[cultureTheme],m=cultureMasteryCount(cultureTheme);
+ const sub=q.subtheme?` • ${q.subtheme.toUpperCase()}`:'';
+ $('cultureBadge').textContent=`${theme.label.toUpperCase()} • ${q.level.toUpperCase()}${sub}`;
+ $('cultureQuestion').innerHTML=`<span class="culture-question-count">FICHE ${cultureIndex%qs.length+1}/${qs.length} • ${m.done} MAÎTRISÉE${m.done>1?'S':''}</span>${esc(q.q)}`;
  $('cultureOptions').innerHTML=q.options.map((o,i)=>`<button data-culture-answer="${i}"><span>${String.fromCharCode(65+i)}</span>${esc(o)}</button>`).join('');
- $('cultureFeedback').innerHTML='';
- $('cultureFeedback').className='quiz-feedback';
- if($('cultureDossier'))$('cultureDossier').innerHTML=`<div class="culture-intro"><b>À connaître avant de répondre</b><p>${esc(theme.intro)}</p></div>`;
+ $('cultureFeedback').innerHTML='';$('cultureFeedback').className='quiz-feedback';
+ if($('cultureDossier'))$('cultureDossier').innerHTML=`<div class="culture-intro"><b>À connaître avant de répondre</b><p>${esc(theme.intro)}${q.subtheme?` Parcours : ${esc(q.subtheme)}.`:''}</p></div>`;
  $('cultureNext').disabled=true;
  document.querySelectorAll('[data-culture-answer]').forEach(b=>b.onclick=()=>answerCulture(Number(b.dataset.cultureAnswer),q));
 }
 function answerCulture(choice,q){
  document.querySelectorAll('[data-culture-answer]').forEach((b,i)=>{b.disabled=true;b.classList.toggle('correct',i===q.answer);b.classList.toggle('wrong',i===choice&&choice!==q.answer)});
- D.culture.total=(D.culture.total||0)+1;
- if(choice===q.answer)D.culture.correct=(D.culture.correct||0)+1;
- D.culture.byTheme[cultureTheme]=D.culture.byTheme[cultureTheme]||{correct:0,total:0};
- D.culture.byTheme[cultureTheme].total++;
- if(choice===q.answer)D.culture.byTheme[cultureTheme].correct++;
- D.culture.mastery[cultureTheme]=D.culture.mastery[cultureTheme]||{};
- if(choice===q.answer)D.culture.mastery[cultureTheme][q.id]=true;
- D.culture.history.unshift({theme:cultureTheme,id:q.id,level:q.level,correct:choice===q.answer,at:now()});
- D.culture.history=D.culture.history.slice(0,250);
+ D.culture.total=(D.culture.total||0)+1;if(choice===q.answer)D.culture.correct=(D.culture.correct||0)+1;
+ D.culture.byTheme[cultureTheme]=D.culture.byTheme[cultureTheme]||{correct:0,total:0};D.culture.byTheme[cultureTheme].total++;if(choice===q.answer)D.culture.byTheme[cultureTheme].correct++;
+ D.culture.mastery[cultureTheme]=D.culture.mastery[cultureTheme]||{};if(choice===q.answer)D.culture.mastery[cultureTheme][q.id]=true;
+ D.culture.history.unshift({theme:cultureTheme,id:q.id,level:q.level,subtheme:q.subtheme||'',correct:choice===q.answer,at:now()});D.culture.history=D.culture.history.slice(0,2500);
  $('cultureFeedback').className=`quiz-feedback ${choice===q.answer?'correct':'wrong'}`;
  $('cultureFeedback').innerHTML=`<b>${choice===q.answer?'Bonne réponse.':'Réponse à revoir.'}</b> ${esc(q.why)}`;
  const wrongs=q.traps.map((t,i)=>i===q.answer?'':`<li><b>${String.fromCharCode(65+i)}.</b> ${esc(t)}</li>`).filter(Boolean).join('');
- $('cultureDossier').innerHTML=`<article class="culture-dossier"><div class="dossier-head"><span>FICHE EXPLICATIVE</span><b>${esc(CULTURE[cultureTheme].label)} • ${q.level.toUpperCase()}</b></div><p class="dossier-summary">${esc(q.dossier)}</p><div class="dossier-grid"><div><h4>À retenir</h4><ul>${q.key.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div><div><h4>Pourquoi les autres réponses ne conviennent pas</h4><ul>${wrongs}</ul></div></div><div class="dossier-follow"><span>QUESTION D’ORAL</span><p>${esc(q.follow)}</p></div><a class="dossier-source" href="${q.url}" target="_blank" rel="noopener">Source ouverte : ${esc(q.source)} ↗</a></article>`;
+ $('cultureDossier').innerHTML=`<article class="culture-dossier"><div class="dossier-head"><span>FICHE EXPLICATIVE</span><b>${esc(CULTURE[cultureTheme].label)} • ${q.level.toUpperCase()}${q.subtheme?` • ${esc(q.subtheme)}`:''}</b></div><p class="dossier-summary">${esc(q.dossier)}</p><div class="dossier-grid"><div><h4>À retenir</h4><ul>${q.key.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div><div><h4>Pourquoi les autres réponses ne conviennent pas</h4><ul>${wrongs}</ul></div></div><div class="dossier-follow"><span>QUESTION D’ORAL</span><p>${esc(q.follow)}</p></div><a class="dossier-source" href="${q.url}" target="_blank" rel="noopener">Source ouverte : ${esc(q.source)} ↗</a></article>`;
  $('cultureNext').disabled=false;save();renderCultureThemes();updateTrainingProgress();
 }
 function nextCulture(){if(!cultureTheme)return;const qs=getCultureQuestions(cultureTheme);cultureIndex=(cultureIndex+1)%Math.max(1,qs.length);showCultureQuestion()}
@@ -1007,7 +1064,11 @@ function bind(){
  $('stGenerate').onclick=function(){$('stText').value=studioTemplate($('stPilot').value,$('stType').value,$('stEvent').value.trim(),$('stObjective').value.trim(),$('stTone').value,selectedAssets(),$('stChannel').value);renderStudioStoryboard();toast('Proposition Studio créée.')};$('stSave').onclick=saveStudio;$('stSearch').oninput=renderStudio;$('stAssetSearch').oninput=renderStudioAssets;$('stSelectAll').onclick=function(){const list=visibleStudioAssets(),all=list.length>0&&list.every(function(x){return studioSelected.has(x.id)});list.forEach(function(x){all?studioSelected.delete(x.id):studioSelected.add(x.id)});resetStudioRendered();renderStudioAssets()};$('stEditVideo').onclick=function(){$('stEditPanel').hidden=!$('stEditPanel').hidden};$('stTransitionsToggle').onclick=function(){$('stTransitionPanel').hidden=!$('stTransitionPanel').hidden};document.querySelectorAll('[data-st-transition]').forEach(function(b){b.onclick=function(){setStudioTransitionPreset(b.dataset.stTransition)}});$('stApplyEdits').onclick=applyStudioEdits;$('stDuration').onchange=function(){studioClipDurationsMs={};resetStudioRendered();renderStudioStoryboard();$('stText').value=studioTemplate($('stPilot').value,$('stType').value,$('stEvent').value.trim(),$('stObjective').value.trim(),$('stTone').value,selectedAssets(),$('stChannel').value)};$('stRenderVideo').onclick=generateStudioVideo;$('stCancelRender').onclick=cancelStudioVideoRender;$('stSaveRender').onclick=saveStudioRenderToLibrary;$('stType').onchange=function(){studioSelected.clear();studioClipDurationsMs={};resetStudioRendered();resetStudioEditSettings();updateStudioProductionUI()};$('stChannel').onchange=function(){resetStudioRendered();updateStudioProductionUI();renderStudioStoryboard()};
  $('repDate').value=today();$('repGenerate').onclick=()=>{$('repText').value=reportTemplate($('repPilot').value,$('repType').value,$('repEvent').value.trim(),$('repFacts').value.trim());toast('Trame générée.')};$('repSave').onclick=saveReport;$('repSearch').oninput=renderReports;
  $('trStart').onclick=newQuestion;$('trEvaluate').onclick=evaluate;$('trMic').onclick=startMic;$('trStop').onclick=stopMic;
- $('cultureNext').onclick=nextCulture;if($('cultureLevel'))$('cultureLevel').onchange=()=>{D.culture.level=$('cultureLevel').value;cultureIndex=0;save();renderCultureThemes();if(cultureTheme)showCultureQuestion()};$('enStart').onclick=startEnglish;$('enListen').onclick=listenEnglish;$('enAnswer').onclick=answerEnglish;$('enEnd').onclick=endEnglish;
+ $('cultureNext').onclick=nextCulture;
+ if($('cultureLevel'))$('cultureLevel').onchange=()=>{D.culture.level=$('cultureLevel').value;cultureIndex=0;save();renderCultureThemes();if(cultureTheme)showCultureQuestion()};
+ if($('cultureMode'))$('cultureMode').onchange=()=>{D.culture.mode=$('cultureMode').value;cultureIndex=0;cultureShuffleSeed=Math.floor(Math.random()*1000000000);save();renderCultureThemes();if(cultureTheme)showCultureQuestion()};
+ if($('cultureSubtheme'))$('cultureSubtheme').onchange=()=>{D.culture.subtheme=$('cultureSubtheme').value;cultureIndex=0;save();if(cultureTheme)showCultureQuestion()};
+ $('enStart').onclick=startEnglish;$('enListen').onclick=listenEnglish;$('enAnswer').onclick=answerEnglish;$('enEnd').onclick=endEnglish;
  $('libDate').value=today();
  $('libFiles').onchange=()=>{$('libFileNote').textContent=$('libFiles').files.length?[...$('libFiles').files].map(f=>f.name+' ('+sizeText(f.size)+')').join(' • '):'Aucun fichier sélectionné.'};
  $('libSave').onclick=addLibraryFiles;
