@@ -158,3 +158,12 @@ button:disabled{opacity:.45;cursor:not-allowed}
 #stTransitionsToggle:not([hidden]){display:inline-flex}
 #stTransitionSummary{margin:8px 0 0}
 @media(max-width:720px){.studio-storyboard-actions{width:100%}.studio-storyboard-actions .btn{flex:1 1 220px}}
+
+
+/* Media V2.4 — culture automobile profonde */
+.culture-level-label select:disabled{opacity:.5;cursor:not-allowed}
+.culture-target-note{border:1px solid #4a3b2b;border-radius:11px;background:#17130e;padding:11px 12px;display:grid;gap:3px}
+.culture-target-note b{font-size:11px;color:#e8ac51}
+.culture-target-note span{font-size:8px;line-height:1.45;color:#9e9381}
+.culture-theme small{line-height:1.35}
+.culture-theme.active small{color:#bda5a7}
