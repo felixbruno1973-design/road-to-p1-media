@@ -1,6 +1,6 @@
 {
   "enabled": true,
-  "command_id": "mobile-logo-gap-publish-20260924",
+  "command_id": "mobile-logo-gap-publish-alt-rest-20260924",
   "mode": "exact_text_replace",
   "page_path": "/",
   "source_text": "120px",
