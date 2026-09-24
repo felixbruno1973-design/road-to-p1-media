@@ -48,10 +48,10 @@ jobs:
           RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
         run: |
           set -euo pipefail
-          for PATH in "/wp-json/elementor/v1/user-data/current-user" "/wp-json/elementor/v1/user" "/wp-json/elementor/v1/system-info"; do
-            NAME="$(echo "$PATH" | tr '/-' '__')"
-            CODE="$(curl -sS -o "$NAME.json" -w '%{http_code}'               -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"               -H "Accept: application/json" "$WP_URL$PATH")"
-            echo "ENDPOINT $PATH -> HTTP $CODE"
+          for EP in "/wp-json/elementor/v1/user-data/current-user" "/wp-json/elementor/v1/user" "/wp-json/elementor/v1/system-info"; do
+            NAME="$(echo "$EP" | tr '/-' '__')"
+            CODE="$(curl -sS -o "$NAME.json" -w '%{http_code}' -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" -H "Accept: application/json" "$WP_URL$EP")"
+            echo "ENDPOINT $EP -> HTTP $CODE"
             if [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ]; then
               jq -c '.. | objects | to_entries[]? | select(.key|test("nonce|ajax";"i")) | {key:.key,value:.value}' "$NAME.json" || true
               echo "TOP_LEVEL_KEYS"
