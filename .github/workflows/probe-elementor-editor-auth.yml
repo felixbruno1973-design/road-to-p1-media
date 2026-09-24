@@ -44,3 +44,30 @@ jobs:
           grep -o -E '"nonce":"[^"]+"' front.html | head -30 || true
           grep -o -E 'elementor_ajax[^"]{0,200}' front.html | head -20 || true
           grep -o -E 'wpadminbar' front.html | head -5 || true
+
+      - name: Show nonce contexts
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          curl --http1.1 -sS -L -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"             -H "Cache-Control: no-cache" "$WP_URL/?rtp1_nonce_context=$GITHUB_RUN_ID" -o front2.html
+          python - <<'PY'
+          import re
+          s=open("front2.html",encoding="utf-8",errors="ignore").read()
+          print("NONCE_CONTEXTS")
+          for m in re.finditer(r'"nonce":"([^"]+)"',s):
+              a=max(0,m.start()-500); b=min(len(s),m.end()+700)
+              print("---")
+              print(re.sub(r"\s+"," ",s[a:b]))
+          print("AJAX_CONTEXTS")
+          for needle in ["elementorCommonConfig","elementor_ajax","admin-ajax.php"]:
+              pos=0
+              for _ in range(10):
+                  i=s.find(needle,pos)
+                  if i<0: break
+                  a=max(0,i-500); b=min(len(s),i+1000)
+                  print("---",needle)
+                  print(re.sub(r"\s+"," ",s[a:b]))
+                  pos=i+len(needle)
+          PY
