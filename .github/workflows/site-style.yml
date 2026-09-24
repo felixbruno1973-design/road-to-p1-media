@@ -98,7 +98,7 @@ jobs:
           }
           json.dump(body,open("draft-request.json","w",encoding="utf-8"),ensure_ascii=False,separators=(",",":"))
           PY
-          CODE="$(curl -sS -o draft-response.json -w '%{http_code}' -X POST -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" -H "Content-Type: application/json" --data-binary @draft-request.json "$WP_URL$RTP1_API/draft")"
+          CODE="$(curl -sS -o draft-response.json -w '%{http_code}' -X POST -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" -H "Content-Type: application/json" --data-binary @draft-request.json "$WP_URL/?rest_route=/rtp1-media/v1/draft")"
           [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || { cat draft-response.json; exit 1; }
           DRAFT_ID="$(jq -r '.draft.id // empty' draft-response.json)"
           [ -n "$DRAFT_ID" ] || { cat draft-response.json; exit 1; }
@@ -113,7 +113,7 @@ jobs:
         run: |
           set -euo pipefail
           jq -n --arg draftId "$DRAFT_ID" '{draftId:$draftId}' > preview-request.json
-          CODE="$(curl -sS -o preview-response.json -w '%{http_code}' -X POST -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" -H "Content-Type: application/json" --data-binary @preview-request.json "$WP_URL$RTP1_API/preview")"
+          CODE="$(curl -sS -o preview-response.json -w '%{http_code}' -X POST -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" -H "Content-Type: application/json" --data-binary @preview-request.json "$WP_URL/?rest_route=/rtp1-media/v1/preview")"
           [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || { cat preview-response.json; exit 1; }
           HASH="$(jq -r '.reviewHash // empty' preview-response.json)"
           [ -n "$HASH" ] || { cat preview-response.json; exit 1; }
@@ -132,7 +132,7 @@ jobs:
             exit 0
           fi
           jq -n --arg draftId "$DRAFT_ID" --arg reviewHash "$REVIEW_HASH" '{draftId:$draftId,reviewHash:$reviewHash,confirm:true}' > apply-request.json
-          CODE="$(curl -sS -o apply-response.json -w '%{http_code}' -X POST -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" -H "Content-Type: application/json" --data-binary @apply-request.json "$WP_URL$RTP1_API/apply")"
+          CODE="$(curl -sS -o apply-response.json -w '%{http_code}' -X POST -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" -H "Content-Type: application/json" --data-binary @apply-request.json "$WP_URL/?rest_route=/rtp1-media/v1/apply")"
           if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ] || [ "$(jq -r '.draft.status // empty' apply-response.json)" != "applied" ]; then
             cat apply-response.json
             exit 1
