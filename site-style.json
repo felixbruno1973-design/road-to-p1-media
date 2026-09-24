@@ -1,0 +1,11 @@
+{
+  "enabled": true,
+  "command_id": "home-mobile-logo-gap-20260924",
+  "page_path": "/",
+  "element_id": "1271118",
+  "selector": ".elementor-10 .elementor-element.elementor-element-8480ea5",
+  "property": "padding-top",
+  "device": "mobile",
+  "value": "25px",
+  "confirm": true
+}
