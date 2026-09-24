@@ -119,10 +119,6 @@ jobs:
           [ -n "$HASH" ] || { cat preview-response.json; exit 1; }
           echo "review_hash=$HASH" >> "$GITHUB_OUTPUT"
 
-      - name: Apply protected style
-        if: ${{ fromJSON('site-style.json') == null }}
-        run: echo "never"
-
       - name: Publish protected style
         shell: bash
         env:
