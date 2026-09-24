@@ -40,7 +40,7 @@ jobs:
           </methodCall>'''
           open("request.xml","w",encoding="utf-8").write(xml)
           PY
-          CODE="$(curl -sS -o response.xml -w '%{http_code}' -X POST             -H 'Content-Type: text/xml' --data-binary @request.xml "$WP_URL/xmlrpc.php")"
+          CODE="$(curl --http1.1 -sS -o response.xml -w '%{http_code}' -X POST             -H 'Content-Type: text/xml' --data-binary @request.xml "$WP_URL/xmlrpc.php")"
           echo "XML-RPC HTTP $CODE"
           [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || { head -c 1000 response.xml; exit 1; }
           python - <<'PY'
