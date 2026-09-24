@@ -30,3 +30,17 @@ jobs:
           grep -o -E 'elementor[^"]*nonce[^"]*' editor.html | head -20 || true
           grep -o -E '"nonce":"[^"]+"' editor.html | head -20 || true
           grep -o -E 'wp-login.php[^"]*' editor.html | head -5 || true
+
+      - name: Probe authenticated frontend
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CODE="$(curl --http1.1 -sS -L -o front.html -w '%{http_code}'             -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"             -H "Cache-Control: no-cache"             "$WP_URL/?rtp1_auth_probe=$GITHUB_RUN_ID")"
+          echo "FRONT HTTP $CODE"
+          echo "SIZE $(wc -c < front.html)"
+          grep -o -E 'elementorCommonConfig[^<]{0,3000}' front.html | head -3 || true
+          grep -o -E '"nonce":"[^"]+"' front.html | head -30 || true
+          grep -o -E 'elementor_ajax[^"]{0,200}' front.html | head -20 || true
+          grep -o -E 'wpadminbar' front.html | head -5 || true
