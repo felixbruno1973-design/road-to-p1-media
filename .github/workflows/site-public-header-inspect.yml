@@ -1,0 +1,45 @@
+name: ROAD TO P1 Inspect Public Header
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - site-header-inspect.json
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-header:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect homepage header markup
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="$(jq -r '.url' site-header-inspect.json)"
+          curl -LsS -A "Mozilla/5.0" "$URL" -o page.html
+          python - <<'PY'
+          import re, html
+          s=open("page.html",encoding="utf-8",errors="ignore").read()
+          print("HTML_LEN",len(s))
+          needles=["masthead","site-header","mobile-header","header-navigation","site-branding","site-logo","hamburger","menu-toggle","social"]
+          low=s.lower()
+          for needle in needles:
+              print("\n###",needle)
+              pos=0; shown=0
+              while True:
+                  i=low.find(needle,pos)
+                  if i<0 or shown>=8: break
+                  a=max(0,i-700); b=min(len(s),i+1800)
+                  chunk=re.sub(r"\s+"," ",s[a:b])
+                  print(chunk)
+                  print("---")
+                  shown+=1; pos=i+len(needle)
+          # Also print header element region if identifiable.
+          m=re.search(r'(<header\b[^>]*>.*?</header>)',s,re.I|re.S)
+          if m:
+              chunk=re.sub(r"\s+"," ",m.group(1))
+              print("\n### HEADER_BLOCK\n",chunk[:30000])
+          PY
