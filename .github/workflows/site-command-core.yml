@@ -339,7 +339,7 @@ jobs:
             "$WP_URL/wp-json/wp/v2/pages/$PAGE_ID?context=edit")"
           if [ "$VERIFY_CODE" -lt 200 ] || [ "$VERIFY_CODE" -ge 300 ]; then
             echo "::error::Could not verify update. Restoring previous page data."
-            curl -sS -o rollback-response.json -X POST \
+            curl -sS -o rollback-response.json -X PUT \
               -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" \
               -H "Content-Type: application/json" \
               --data-binary @core-rollback.json \
@@ -374,7 +374,7 @@ jobs:
           VERIFY_RESULT="$?"
           if [ "$VERIFY_RESULT" != "0" ]; then
             echo "::error::Verification failed. Restoring previous page data."
-            curl -sS -o rollback-response.json -X POST \
+            curl -sS -o rollback-response.json -X PUT \
               -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" \
               -H "Content-Type: application/json" \
               --data-binary @core-rollback.json \
