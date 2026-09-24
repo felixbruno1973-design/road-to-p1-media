@@ -1,0 +1,68 @@
+name: ROAD TO P1 Refresh Home Elementor Cache
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - home-cache-refresh.json
+
+permissions:
+  contents: read
+
+jobs:
+  refresh-home:
+    runs-on: ubuntu-latest
+    env:
+      WP_URL: https://road-to-p1.com
+      WP_USERNAME: roadtop1-media
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate request
+        run: |
+          set -euo pipefail
+          jq -e '.confirm == true and .page_id == 10 and .page_path == "/"' home-cache-refresh.json >/dev/null
+
+      - name: Trigger WordPress save hooks
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CODE="$(curl -sS -o before.json -w '%{http_code}'             -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"             -H "Accept: application/json"             "$WP_URL/wp-json/wp/v2/pages/10?context=edit")"
+          [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || { cat before.json; exit 1; }
+
+          TITLE="$(jq -r '.title.raw' before.json)"
+          CONTENT="$(jq -r '.content.raw' before.json)"
+          META="$(jq -c '.meta._elementor_data' before.json)"
+          jq -n --arg title "$TITLE" --arg content "$CONTENT" --argjson meta "$META"             '{title:$title,content:$content,status:"publish",meta:{_elementor_data:$meta}}' > touch.json
+
+          OK=0
+          for ATTEMPT in 1 2 3 4; do
+            CODE="$(curl -sS -o response.json -w '%{http_code}'               -X PUT               -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"               -H "Content-Type: application/json"               --data-binary @touch.json               "$WP_URL/?rest_route=/wp/v2/pages/10")"
+            echo "Touch attempt $ATTEMPT -> HTTP $CODE"
+            if [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ]; then OK=1; break; fi
+            sleep 4
+          done
+          [ "$OK" = "1" ] || { cat response.json; exit 1; }
+
+      - name: Verify live mobile CSS
+        shell: bash
+        run: |
+          set -euo pipefail
+          OK=0
+          for ATTEMPT in 1 2 3 4 5; do
+            URL="$WP_URL/?rtp1_home_refresh=$GITHUB_RUN_ID-$ATTEMPT"
+            CODE="$(curl -sS -L -A "Mozilla/5.0" -o public.html -w '%{http_code}'               -H "Cache-Control: no-cache, no-store, must-revalidate" "$URL")"
+            if [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] &&                grep -Fq '#mobile-header .site-main-header-inner-wrap{min-height:55px!important}' public.html &&                grep -Fq 'padding-top:25px!important' public.html; then
+              OK=1
+              break
+            fi
+            sleep 4
+          done
+          if [ "$OK" != "1" ]; then
+            echo "::error::Live page still exposes stale Elementor HTML/CSS."
+            grep -o 'padding-top:[0-9]*px!important' public.html | sort -u || true
+            exit 1
+          fi
+          echo "Live homepage cache refreshed and mobile CSS verified."
