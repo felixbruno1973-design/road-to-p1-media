@@ -41,3 +41,34 @@ jobs:
           jq '.routes["/elementor/v1/documents"]' routes.json
           echo "---- routes containing save/update/document ----"
           jq -r '.routes | keys[]' routes.json | grep -Ei 'document|save|update' | grep -Ei 'elementor' || true
+
+      - name: Probe Elementor authenticated user endpoints
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for PATH in "/wp-json/elementor/v1/user-data/current-user" "/wp-json/elementor/v1/user" "/wp-json/elementor/v1/system-info"; do
+            NAME="$(echo "$PATH" | tr '/-' '__')"
+            CODE="$(curl -sS -o "$NAME.json" -w '%{http_code}'               -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" -H "Accept: application/json" "$WP_URL$PATH")"
+            echo "ENDPOINT $PATH -> HTTP $CODE"
+            if [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ]; then
+              python - "$NAME.json" <<'PY'
+import json,sys,re
+p=sys.argv[1]
+try:
+    d=json.load(open(p,encoding="utf-8"))
+except Exception:
+    print(open(p,encoding="utf-8",errors="ignore").read()[:3000]); raise SystemExit
+s=json.dumps(d,ensure_ascii=False)
+for pat in ["nonce","ajax","elementor"]:
+    if pat in s.lower():
+        print("HAS",pat)
+for m in re.finditer(r'nonce',s,re.I):
+    a=max(0,m.start()-300); b=min(len(s),m.start()+700)
+    print(s[a:b])
+PY
+            else
+              cat "$NAME.json"
+            fi
+          done
