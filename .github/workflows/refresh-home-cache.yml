@@ -46,6 +46,20 @@ jobs:
           done
           [ "$OK" = "1" ] || { cat response.json; exit 1; }
 
+      - name: Clear Elementor cache
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CODE="$(curl -sS -o cache-response.json -w '%{http_code}'             -X DELETE             -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"             -H "Accept: application/json"             "$WP_URL/?rest_route=/elementor/v1/cache")"
+          echo "Elementor cache clear -> HTTP $CODE"
+          if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ]; then
+            cat cache-response.json
+            exit 1
+          fi
+          cat cache-response.json || true
+
       - name: Verify live mobile CSS
         shell: bash
         run: |
