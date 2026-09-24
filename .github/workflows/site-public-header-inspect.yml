@@ -37,6 +37,17 @@ jobs:
                   print(chunk)
                   print("---")
                   shown+=1; pos=i+len(needle)
+          print("\n### HEADER_CSS_FOCUS")
+          for needle in ["site-main-header-inner-wrap","site-top-header-inner-wrap","site-header-upper-inner-wrap","site-header-inner-wrap","site-mobile-header-wrap","mobile-toggle-open-container"]:
+              print("\n--",needle)
+              pos=0; shown=0
+              while True:
+                  i=low.find(needle.lower(),pos)
+                  if i<0 or shown>=20: break
+                  a=max(0,i-450); b=min(len(s),i+900)
+                  chunk=re.sub(r"\s+"," ",s[a:b])
+                  print(chunk)
+                  shown+=1; pos=i+len(needle)
           # Also print header element region if identifiable.
           m=re.search(r'(<header\b[^>]*>.*?</header>)',s,re.I|re.S)
           if m:
