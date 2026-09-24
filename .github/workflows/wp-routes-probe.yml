@@ -29,6 +29,10 @@ jobs:
           jq -r '.routes | keys[]' routes.json | grep -Ei 'elementor|cache|optimi|clear|regener|flush|purge' || true
           echo "---- Kadence / theme / customizer / option routes ----"
           jq -r '.routes | keys[]' routes.json | grep -Ei 'kadence|customiz|theme|option|settings' || true
+          echo "---- WP settings keys ----"
+          SCODE="$(curl -sS -o settings.json -w '%{http_code}' -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" -H "Accept: application/json" "$WP_URL/wp-json/wp/v2/settings")"
+          echo "Settings HTTP $SCODE"
+          if [ "$SCODE" -ge 200 ] && [ "$SCODE" -lt 300 ]; then jq -r 'keys[]' settings.json | sort; else cat settings.json; fi
           echo "---- /elementor/v1/cache ----"
           jq '.routes["/elementor/v1/cache"]' routes.json
           echo "---- /elementor/v1/post ----"
