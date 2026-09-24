@@ -1,0 +1,69 @@
+name: ROAD TO P1 Probe Home Meta XML-RPC
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - home-meta-probe.json
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      WP_URL: https://road-to-p1.com
+      WP_USERNAME: roadtop1-media
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read page custom fields through XML-RPC
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os, html
+          u=html.escape(os.environ["WP_USERNAME"])
+          p=html.escape(os.environ["RTP1_WP_APP_PASSWORD"])
+          xml=f'''<?xml version="1.0"?>
+          <methodCall>
+            <methodName>wp.getPost</methodName>
+            <params>
+              <param><value><int>0</int></value></param>
+              <param><value><string>{u}</string></value></param>
+              <param><value><string>{p}</string></value></param>
+              <param><value><int>10</int></value></param>
+              <param><value><array><data><value><string>custom_fields</string></value></data></array></value></param>
+            </params>
+          </methodCall>'''
+          open("request.xml","w",encoding="utf-8").write(xml)
+          PY
+          CODE="$(curl -sS -o response.xml -w '%{http_code}' -X POST             -H 'Content-Type: text/xml' --data-binary @request.xml "$WP_URL/xmlrpc.php")"
+          echo "XML-RPC HTTP $CODE"
+          [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || { head -c 1000 response.xml; exit 1; }
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          root=ET.parse("response.xml").getroot()
+          text=ET.tostring(root,encoding="unicode")
+          if "<fault>" in text:
+              print(text[:3000])
+              raise SystemExit(1)
+          keys=[]
+          for st in root.findall(".//struct"):
+              members={}
+              for m in st.findall("./member"):
+                  n=m.findtext("name")
+                  v=m.find("value")
+                  if n and v is not None:
+                      s=v.findtext("string")
+                      if s is None:
+                          s=v.findtext("int")
+                      members[n]=s
+              if "key" in members:
+                  keys.append((members.get("id"),members.get("key"),len(members.get("value") or "")))
+          print("CUSTOM_FIELDS")
+          for row in keys:
+              print(row)
+          PY
