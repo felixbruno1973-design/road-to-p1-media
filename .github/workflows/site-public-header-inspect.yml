@@ -48,6 +48,12 @@ jobs:
                   chunk=re.sub(r"\s+"," ",s[a:b])
                   print(chunk)
                   shown+=1; pos=i+len(needle)
+          print("\n### EXACT_HEIGHT_RULES")
+          for sel in ["site-main-header-inner-wrap","site-top-header-inner-wrap","site-header-upper-inner-wrap"]:
+              pat=re.compile(r"\\."+re.escape(sel)+r"\\{[^}]*\\}",re.I)
+              for m in pat.finditer(s):
+                  a=max(0,m.start()-180); b=min(len(s),m.end()+80)
+                  print(sel, re.sub(r"\\s+"," ",s[a:b]))
           # Also print header element region if identifiable.
           m=re.search(r'(<header\b[^>]*>.*?</header>)',s,re.I|re.S)
           if m:
