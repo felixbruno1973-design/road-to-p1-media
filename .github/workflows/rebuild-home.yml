@@ -1,0 +1,89 @@
+name: ROAD TO P1 Rebuild Home Elementor Render
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - home-rebuild.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: road-to-p1-home-rebuild
+  cancel-in-progress: false
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    env:
+      WP_URL: https://road-to-p1.com
+      WP_USERNAME: roadtop1-media
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate
+        run: |
+          set -euo pipefail
+          jq -e '.confirm == true and .page_id == 10 and .element_id == "a1ee02a"' home-rebuild.json >/dev/null
+
+      - name: Toggle heading through protected flow
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          run_change () {
+            local TARGET="$1"
+            local LABEL="$2"
+
+            CODE="$(curl -sS -o snapshot.json -w '%{http_code}'               -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"               -H "Accept: application/json"               "$WP_URL/wp-json/rtp1-media/v1/snapshot/10")"
+            [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || { cat snapshot.json; exit 1; }
+
+            REV="$(jq -r '.revision' snapshot.json)"
+            VALUE_JSON="$(jq -Rn --arg t "$TARGET" '$t|tojson')"
+            jq -n --arg rev "$REV" --arg value_json "$VALUE_JSON" --arg label "$LABEL"               '{pageId:10,revision:$rev,instruction:("Régénération du rendu Elementor: "+$label),summary:("Régénération homepage: "+$label),device:"all",changes:[{kind:"setting",elementId:"a1ee02a",key:"title",selector:"",device:"all",value:$value_json,reason:"Forcer une sauvegarde Elementor contrôlée et la reconstruction des caches."}]}'               > draft-request.json
+
+            CODE="$(curl -sS -o draft.json -w '%{http_code}' -X POST               -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" -H "Content-Type: application/json"               --data-binary @draft-request.json "$WP_URL/?rest_route=/rtp1-media/v1/draft")"
+            [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || { cat draft.json; exit 1; }
+            DRAFT_ID="$(jq -r '.draft.id' draft.json)"
+
+            jq -n --arg draftId "$DRAFT_ID" '{draftId:$draftId}' > preview-request.json
+            CODE="$(curl -sS -o preview.json -w '%{http_code}' -X POST               -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" -H "Content-Type: application/json"               --data-binary @preview-request.json "$WP_URL/?rest_route=/rtp1-media/v1/preview")"
+            [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || { cat preview.json; exit 1; }
+            REVIEW_HASH="$(jq -r '.reviewHash' preview.json)"
+
+            jq -n --arg draftId "$DRAFT_ID" --arg reviewHash "$REVIEW_HASH"               '{draftId:$draftId,reviewHash:$reviewHash,confirm:true}' > apply-request.json
+            CODE="$(curl -sS -o apply.json -w '%{http_code}' -X POST               -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" -H "Content-Type: application/json"               --data-binary @apply-request.json "$WP_URL/?rest_route=/rtp1-media/v1/apply")"
+            echo "Apply $LABEL -> HTTP $CODE"
+            if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ] || [ "$(jq -r '.draft.status // empty' apply.json)" != "applied" ]; then
+              cat apply.json
+              exit 1
+            fi
+          }
+
+          FINAL="L'association Road to P1"
+          run_change "$FINAL " "étape temporaire"
+          run_change "$FINAL" "restauration finale"
+
+      - name: Verify live homepage
+        shell: bash
+        run: |
+          set -euo pipefail
+          OK=0
+          for ATTEMPT in 1 2 3 4 5; do
+            URL="$WP_URL/?rtp1_rebuild=$GITHUB_RUN_ID-$ATTEMPT"
+            CODE="$(curl -sS -L -A "Mozilla/5.0" -o public.html -w '%{http_code}'               -H "Cache-Control: no-cache, no-store, must-revalidate" "$URL")"
+            if [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] &&                grep -Fq '#mobile-header .site-main-header-inner-wrap{min-height:55px!important}' public.html &&                grep -Fq 'padding-top:25px!important' public.html; then
+              OK=1
+              break
+            fi
+            sleep 4
+          done
+          if [ "$OK" != "1" ]; then
+            echo "::error::Homepage still stale after protected rebuild."
+            grep -o 'padding-top:[0-9]*px!important' public.html | sort -u || true
+            exit 1
+          fi
+          echo "Homepage rebuilt and verified live."
