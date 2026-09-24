@@ -326,7 +326,7 @@ jobs:
             -X POST -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" \
             -H "Content-Type: application/json" \
             --data-binary @core-update.json \
-            "$WP_URL/wp-json/wp/v2/pages/$PAGE_ID")"
+            "$WP_URL/?rest_route=/wp/v2/pages/$PAGE_ID")"
           if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ]; then
             jq . update-response.json 2>/dev/null || cat update-response.json
             echo "::error::WordPress core update failed (HTTP $CODE)."
@@ -343,7 +343,7 @@ jobs:
               -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" \
               -H "Content-Type: application/json" \
               --data-binary @core-rollback.json \
-              "$WP_URL/wp-json/wp/v2/pages/$PAGE_ID" >/dev/null
+              "$WP_URL/?rest_route=/wp/v2/pages/$PAGE_ID" >/dev/null
             exit 1
           fi
 
@@ -378,7 +378,7 @@ jobs:
               -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" \
               -H "Content-Type: application/json" \
               --data-binary @core-rollback.json \
-              "$WP_URL/wp-json/wp/v2/pages/$PAGE_ID" >/dev/null
+              "$WP_URL/?rest_route=/wp/v2/pages/$PAGE_ID" >/dev/null
             exit 1
           fi
           echo "Exact Elementor text replacement verified."
