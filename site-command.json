@@ -1,10 +1,10 @@
 {
   "enabled": true,
-  "command_id": "mobile-logo-gap-put-20260924",
+  "command_id": "mobile-only-logo-gap-20260924",
   "mode": "exact_text_replace",
   "page_path": "/",
-  "source_text": "120px",
-  "replacement_text": "25px",
+  "source_text": "@media(max-width:1024px){.elementor-10 .elementor-element.elementor-element-8480ea5{padding-top:25px!important}}",
+  "replacement_text": "@media(max-width:1024px){.elementor-10 .elementor-element.elementor-element-8480ea5{padding-top:120px!important}}@media(max-width:767px){.elementor-10 .elementor-element.elementor-element-8480ea5{padding-top:25px!important}}",
   "expected_occurrences": 1,
   "confirm": true
 }
