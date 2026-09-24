@@ -323,7 +323,7 @@ jobs:
           fi
 
           CODE="$(curl -sS -o update-response.json -w '%{http_code}' \
-            -X POST -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" \
+            -X PUT -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" \
             -H "Content-Type: application/json" \
             --data-binary @core-update.json \
             "$WP_URL/?rest_route=/wp/v2/pages/$PAGE_ID")"
