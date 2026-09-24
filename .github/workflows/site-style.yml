@@ -1,0 +1,144 @@
+name: ROAD TO P1 Protected Style Command
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - site-style.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: road-to-p1-site-style
+  cancel-in-progress: false
+
+jobs:
+  apply-style:
+    runs-on: ubuntu-latest
+    env:
+      WP_URL: https://road-to-p1.com
+      WP_USERNAME: roadtop1-media
+      RTP1_API: /wp-json/rtp1-media/v1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate style command
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, re
+          d=json.load(open("site-style.json",encoding="utf-8"))
+          if not d.get("enabled",False):
+              print("Command disabled.")
+              raise SystemExit(0)
+          if not isinstance(d.get("page_path"),str) or not d["page_path"].startswith("/"):
+              raise SystemExit("Invalid page_path")
+          if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}",str(d.get("element_id",""))):
+              raise SystemExit("Invalid element_id")
+          if d.get("device") not in ("mobile","tablet","desktop","all"):
+              raise SystemExit("Invalid device")
+          if d.get("property") not in ("padding-top","padding-bottom","padding-left","padding-right","margin-top","margin-bottom","margin-left","margin-right","gap","row-gap","column-gap","height","min-height","max-height","width","max-width"):
+              raise SystemExit("Invalid property")
+          if not isinstance(d.get("selector"),str) or len(d["selector"])>250:
+              raise SystemExit("Invalid selector")
+          if not isinstance(d.get("value"),str) or not re.fullmatch(r"[A-Za-z0-9#.% ,()/-]{1,120}",d["value"]):
+              raise SystemExit("Invalid value")
+          if not isinstance(d.get("confirm"),bool):
+              raise SystemExit("confirm must be boolean")
+          PY
+
+      - name: Resolve page and build protected draft
+        id: draft
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CODE="$(curl -sS -o pages.json -w '%{http_code}' -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" -H "Accept: application/json" "$WP_URL$RTP1_API/pages")"
+          [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || { cat pages.json; exit 1; }
+          PAGE_ID="$(python - <<'PY'
+          import json
+          from urllib.parse import urlparse
+          cmd=json.load(open("site-style.json",encoding="utf-8"))
+          data=json.load(open("pages.json",encoding="utf-8"))
+          target=cmd["page_path"].rstrip("/") or "/"
+          ms=[p for p in data.get("pages",[]) if (urlparse(p.get("link","")).path.rstrip("/") or "/")==target]
+          if len(ms)!=1: raise SystemExit(f"Expected one page for {target}; found {len(ms)}")
+          print(ms[0]["id"])
+          PY
+          )"
+          CODE="$(curl -sS -o snapshot.json -w '%{http_code}' -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" -H "Accept: application/json" "$WP_URL$RTP1_API/snapshot/$PAGE_ID")"
+          [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || { cat snapshot.json; exit 1; }
+          python - <<'PY'
+          import json
+          cmd=json.load(open("site-style.json",encoding="utf-8"))
+          snap=json.load(open("snapshot.json",encoding="utf-8"))
+          item=next((e for e in snap.get("elements",[]) if e.get("id")==cmd["element_id"]),None)
+          if not item: raise SystemExit("Target element not found")
+          html=item.get("html") or {}
+          if cmd["selector"] not in html.get("selectors",[]): raise SystemExit("Selector not allowed by protected plugin")
+          if cmd["property"] not in html.get("properties",[]): raise SystemExit("Property not allowed by protected plugin")
+          body={
+            "pageId":int(snap["page"]["id"]),
+            "revision":snap["revision"],
+            "instruction":"Réduire uniquement l’espace supérieur du hero sur mobile.",
+            "summary":f"{cmd['property']} mobile → {cmd['value']}",
+            "device":cmd["device"],
+            "changes":[{
+              "kind":"html_style",
+              "elementId":cmd["element_id"],
+              "key":cmd["property"],
+              "selector":cmd["selector"],
+              "device":cmd["device"],
+              "value":cmd["value"],
+              "reason":"Réduire l’espace entre le logo et la phrase d’introduction sur mobile."
+            }]
+          }
+          json.dump(body,open("draft-request.json","w",encoding="utf-8"),ensure_ascii=False,separators=(",",":"))
+          PY
+          CODE="$(curl -sS -o draft-response.json -w '%{http_code}' -X POST -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" -H "Content-Type: application/json" --data-binary @draft-request.json "$WP_URL$RTP1_API/draft")"
+          [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || { cat draft-response.json; exit 1; }
+          DRAFT_ID="$(jq -r '.draft.id // empty' draft-response.json)"
+          [ -n "$DRAFT_ID" ] || { cat draft-response.json; exit 1; }
+          echo "draft_id=$DRAFT_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Generate protected preview
+        id: preview
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+          DRAFT_ID: ${{ steps.draft.outputs.draft_id }}
+        run: |
+          set -euo pipefail
+          jq -n --arg draftId "$DRAFT_ID" '{draftId:$draftId}' > preview-request.json
+          CODE="$(curl -sS -o preview-response.json -w '%{http_code}' -X POST -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" -H "Content-Type: application/json" --data-binary @preview-request.json "$WP_URL$RTP1_API/preview")"
+          [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ] || { cat preview-response.json; exit 1; }
+          HASH="$(jq -r '.reviewHash // empty' preview-response.json)"
+          [ -n "$HASH" ] || { cat preview-response.json; exit 1; }
+          echo "review_hash=$HASH" >> "$GITHUB_OUTPUT"
+
+      - name: Apply protected style
+        if: ${{ fromJSON('site-style.json') == null }}
+        run: echo "never"
+
+      - name: Publish protected style
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+          DRAFT_ID: ${{ steps.draft.outputs.draft_id }}
+          REVIEW_HASH: ${{ steps.preview.outputs.review_hash }}
+        run: |
+          set -euo pipefail
+          if [ "$(jq -r '.confirm' site-style.json)" != "true" ]; then
+            echo "Preview prepared; publication not requested."
+            exit 0
+          fi
+          jq -n --arg draftId "$DRAFT_ID" --arg reviewHash "$REVIEW_HASH" '{draftId:$draftId,reviewHash:$reviewHash,confirm:true}' > apply-request.json
+          CODE="$(curl -sS -o apply-response.json -w '%{http_code}' -X POST -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD" -H "Content-Type: application/json" --data-binary @apply-request.json "$WP_URL$RTP1_API/apply")"
+          if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ] || [ "$(jq -r '.draft.status // empty' apply-response.json)" != "applied" ]; then
+            cat apply-response.json
+            exit 1
+          fi
+          jq '{status:.draft.status,message,warning,diff:.draft.diff}' apply-response.json
