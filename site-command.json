@@ -1,10 +1,10 @@
 {
   "enabled": true,
-  "command_id": "mobile-logo-gap-dryrun-20260924",
+  "command_id": "mobile-logo-gap-publish-20260924",
   "mode": "exact_text_replace",
   "page_path": "/",
   "source_text": "120px",
   "replacement_text": "25px",
   "expected_occurrences": 1,
-  "confirm": false
+  "confirm": true
 }
