@@ -1,0 +1,32 @@
+name: ROAD TO P1 Probe Elementor Editor Auth
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - elementor-editor-probe.json
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      WP_URL: https://road-to-p1.com
+      WP_USERNAME: roadtop1-media
+    steps:
+      - uses: actions/checkout@v4
+      - name: Probe authenticated Elementor editor
+        shell: bash
+        env:
+          RTP1_WP_APP_PASSWORD: ${{ secrets.RTP1_WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CODE="$(curl --http1.1 -sS -L -o editor.html -w '%{http_code}'             -u "$WP_USERNAME:$RTP1_WP_APP_PASSWORD"             -H "Cache-Control: no-cache"             "$WP_URL/wp-admin/post.php?post=10&action=elementor")"
+          echo "EDITOR HTTP $CODE"
+          echo "SIZE $(wc -c < editor.html)"
+          grep -o -E '<title>[^<]+' editor.html | head -1 || true
+          grep -o -E 'elementor[^"]*nonce[^"]*' editor.html | head -20 || true
+          grep -o -E '"nonce":"[^"]+"' editor.html | head -20 || true
+          grep -o -E 'wp-login.php[^"]*' editor.html | head -5 || true
