@@ -85,4 +85,15 @@ jobs:
                   else:
                       print("META",k,"type=",type(v).__name__)
           walk(data)
+          req=json.load(open("site-inspect.json",encoding="utf-8"))
+          wanted=req.get("element_id")
+          if wanted:
+              def find(nodes):
+                  for n in nodes or []:
+                      if n.get("id")==wanted: return n
+                      hit=find(n.get("elements") or [])
+                      if hit: return hit
+                  return None
+              hit=find(data)
+              print("SELECTED_ELEMENT:", json.dumps(hit,ensure_ascii=False) if hit else "NOT_FOUND")
           PY
