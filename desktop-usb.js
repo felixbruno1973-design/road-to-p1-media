@@ -144,6 +144,34 @@
         status.textContent='Analyse impossible : '+String(err);
       } finally {button.disabled=false;}
     });
+    window.addEventListener('rtp1:montage-request',event=>{
+      const request=event.detail;
+      if(!request||typeof request.instruction!=='string')return;
+      if(!all.length){
+        window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{count:0,message:'Choisis une fois le dossier du disque USB dans Library.'}}));
+        return;
+      }
+      const normalized=s=>s.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('fr');
+      const terms=normalized(request.instruction).split(/[^a-z0-9]+/).filter(w=>w.length>2&&
+        !['fais','moi','une','des','les','avec','video','videos','reel','montage','secondes','seconde','sec','plus','meilleurs','meilleures','moments','pour','format','instagram','tiktok','musique','dynamique'].includes(w)&&!/^[0-9]{1,3}$/.test(w));
+      const ranked=all.filter(x=>x.category==='Vidéo'||x.category==='Photo').map(file=>{
+        const name=normalized(file.relativePath);
+        return {file,score:terms.reduce((n,t)=>n+(name.includes(t)?1:0),0)};
+      }).filter(x=>x.score>0).sort((a,b)=>b.score-a.score||a.file.relativePath.localeCompare(b.file.relativePath,'fr'));
+      selected.clear();
+      for(const entry of ranked.slice(0,30))selected.set(entry.file.relativePath,entry.file);
+      selectionStatus();page=0;render();
+      if(!selected.size){
+        window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{count:0,message:'Aucun média trouvé par son nom. Les actions filmées ne sont pas encore analysées.'}}));
+        return;
+      }
+      window.dispatchEvent(new CustomEvent('rtp1:usb-media-selected',{detail:{
+        source,items:[...selected.values()].map(x=>({relativePath:x.relativePath,category:x.category,sizeBytes:x.sizeBytes}))
+      }}));
+      window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{
+        count:selected.size,message:selected.size+' média(s) proposés automatiquement à partir des noms de fichiers. La reconnaissance visuelle reste à développer.'
+      }}));
+    });
     panel.append(title,explanation,button,status,suggestControls,suggestionStatus,controls,count,list,more,selectionLabel,studioButton);
     library.prepend(panel);
     selectionStatus();render();
