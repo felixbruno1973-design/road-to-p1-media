@@ -29,7 +29,10 @@
       const targetSeconds=seconds?Math.min(600,Math.max(5,Number(seconds[1]))):45;
       const detail={instruction,targetSeconds,format:/youtube|horizontal|paysage/i.test(instruction)?'16:9':'9:16'};
       window.dispatchEvent(new CustomEvent('rtp1:montage-request',{detail}));
-      result.textContent='Objectif enregistré pour la préparation locale : '+targetSeconds+' secondes, format '+detail.format+'. Pour le moment, sélectionne les médias dans Library puis lance leur préparation vers Studio. Le montage MP4 automatique reste à développer.';
+      result.textContent='Recherche du catalogue USB en cours…';
+    });
+    window.addEventListener('rtp1:montage-selection-result',event=>{
+      if(event.detail?.message)result.textContent=event.detail.message;
     });
     panel.append(heading,explanation,prompt,action,result);
     studio.prepend(panel);
