@@ -11,6 +11,9 @@ export function validateProject(project){
   const duration=Number(project.targetDurationMs);
   if(!Number.isSafeInteger(duration)||duration<5000||duration>600000)throw Error('Invalid target duration');
   for(const item of project.clips){
+    if(item.inMs!==null&&item.inMs!==undefined&&(!Number.isSafeInteger(item.inMs)||item.inMs<0))throw Error('Invalid in point');
+    if(item.outMs!==null&&item.outMs!==undefined&&(!Number.isSafeInteger(item.outMs)||item.outMs<0||item.outMs<Number(item.inMs||0)))throw Error('Invalid out point');
+    if(item.durationMs!==null&&item.durationMs!==undefined&&(!Number.isSafeInteger(item.durationMs)||item.durationMs<=0||item.durationMs>600000))throw Error('Invalid clip duration');
     if(!item||typeof item.relativePath!=='string'||!item.relativePath||isAbsolute(item.relativePath)||/^[a-z]:/i.test(item.relativePath)||item.relativePath.split(/[\\/]/).some(x=>x==='..'||!x))throw Error('Invalid relative media path');
     if(!['Vidéo','Photo'].includes(item.category))throw Error('Only videos and images supported');
   }
@@ -25,6 +28,14 @@ function runFFmpeg(bin,args){
     child.on('close',code=>code===0?ok():fail(Error('FFmpeg failed: '+error)));
   });
 }
+export function clipTiming(project, clip){
+  validateProject(project);
+  const fallback=project.targetDurationMs/project.clips.length;
+  const durationMs=clip.durationMs??fallback;
+  const inMs=clip.inMs??0;
+  const outMs=clip.outMs??(inMs+durationMs);
+  return {inSeconds:inMs/1000,durationSeconds:Math.min(durationMs,outMs-inMs)/1000};
+}
 export async function render(project,{root,output,ffmpeg='ffmpeg'}){
   validateProject(project);
   const base=await realpath(resolve(root));
@@ -37,7 +48,6 @@ export async function render(project,{root,output,ffmpeg='ffmpeg'}){
   const relativeDir=relative(base,outputDir);
   if(!relativeDir.startsWith('..')&&!isAbsolute(relativeDir))throw Error('Output folder must be outside USB source root');
   const count=project.clips.length;
-  const secondsPerClip=(project.targetDurationMs/1000)/count;
   const work=await mkdtemp(join(tmpdir(),'rtp1-render-'));
   try{
     const segments=[];
@@ -50,10 +60,11 @@ export async function render(project,{root,output,ffmpeg='ffmpeg'}){
       const segment=join(work,'part-'+String(i).padStart(4,'0')+'.mp4');
       const photo=clip.category==='Photo';
       const args=['-hide_banner','-loglevel','error','-y'];
+      const timing=clipTiming(project,clip);
+      if(timing.durationSeconds<=0)throw Error('Empty clip interval');
       if(photo)args.push('-loop','1','-framerate','30');
-      args.push('-i',source);
-      if(!photo)args.push('-t',String(secondsPerClip));
-      else args.push('-t',String(secondsPerClip));
+      else if(timing.inSeconds>0)args.push('-ss',String(timing.inSeconds));
+      args.push('-i',source,'-t',String(timing.durationSeconds));
       args.push('-vf','scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30',
         '-an','-c:v','libx264','-pix_fmt','yuv420p','-preset','veryfast','-movflags','+faststart',segment);
       await runFFmpeg(ffmpeg,args);
