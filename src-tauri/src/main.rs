@@ -76,7 +76,7 @@ async fn choose_and_scan_folder(state: tauri::State<'_, SelectedFolder>) -> Resu
         scan(&canonical).map(|result|Some((result,canonical)))
     })
     .await
-    .map_err(|error| format!("Erreur du processus d'indexation : {error}"))?;
+    .map_err(|error| format!("Erreur du processus d'indexation : {error}"))??;
     if let Some((_, ref root)) = chosen {
         *state.0.lock().map_err(|_| "Verrou du dossier indisponible.")? = Some(root.clone());
     }
