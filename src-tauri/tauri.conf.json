@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "com.roadtop1.media",
   "build": {
-    "frontendDist": ".."
+    "frontendDist": "../desktop-dist"
   },
   "app": {
     "withGlobalTauri": true,
