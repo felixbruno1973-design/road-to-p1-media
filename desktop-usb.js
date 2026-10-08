@@ -7,6 +7,7 @@
     const invoke = window.__TAURI__?.core?.invoke;
     if (!library || !invoke) return;
     let all = [], source = '', page = 0;
+    let pendingMontageRequest=null;
     const selected = new Map();
     const panel = document.createElement('section');
     panel.className = 'panel';
@@ -135,20 +136,28 @@
       status.textContent='Analyse du dossier USB…';
       try {
         const result=await invoke('choose_and_scan_folder');
-        if(!result) {status.textContent='Sélection annulée.';return;}
+        if(!result) {status.textContent='Sélection annulée.';pendingMontageRequest=null;return;}
         all=result.files; source=result.sourceName; page=0;selected.clear();selectionStatus();
         status.textContent=result.totalCount+' média(s) recensé(s)'+
           (result.warnings.length?' • '+result.warnings.length+' avertissement(s)':'');
         render();
+        if(pendingMontageRequest) {
+          const request=pendingMontageRequest;
+          pendingMontageRequest=null;
+          window.dispatchEvent(new CustomEvent('rtp1:montage-request',{detail:request}));
+        }
       } catch(err) {
         status.textContent='Analyse impossible : '+String(err);
+        pendingMontageRequest=null;
       } finally {button.disabled=false;}
     });
     window.addEventListener('rtp1:montage-request',event=>{
       const request=event.detail;
       if(!request||typeof request.instruction!=='string')return;
       if(!all.length){
-        window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{count:0,message:'Choisis une fois le dossier du disque USB dans Library.'}}));
+        pendingMontageRequest=request;
+        window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{count:0,message:'Sélectionne ton dossier USB : la recherche reprendra automatiquement après son analyse.'}}));
+        button.click();
         return;
       }
       const normalized=s=>s.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('fr');
