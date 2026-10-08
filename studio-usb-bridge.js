@@ -24,7 +24,7 @@
     const exportButton=document.createElement('button');
     exportButton.type='button';exportButton.className='btn';exportButton.disabled=true;
     exportButton.textContent='Exporter le projet JSON';
-    exportButton.addEventListener('click',()=>{
+    exportButton.addEventListener('click',async()=>{
       if(!current?.items?.length)return;
       const seconds=Number(duration.value);
       if(!Number.isFinite(seconds)||seconds<5||seconds>600){note.textContent='Durée invalide (5 à 600 s).';return;}
@@ -37,10 +37,15 @@
           order:i,inMs:null,outMs:null,durationMs:null
         }))
       };
-      const url=URL.createObjectURL(new Blob([JSON.stringify(project,null,2)],{type:'application/json'}));
-      const link=document.createElement('a');
-      link.href=url;link.download='road-to-p1-montage-projet.json';link.click();
-      setTimeout(()=>URL.revokeObjectURL(url),1000);
+      exportButton.disabled=true;
+      try {
+        const saved=await window.__TAURI__.core.invoke('save_studio_project',{content:JSON.stringify(project,null,2)});
+        note.textContent=saved?'Projet enregistré : '+saved:'Enregistrement annulé.';
+      } catch(error) {
+        note.textContent='Impossible d’enregistrer le projet : '+String(error);
+      } finally {
+        exportButton.disabled=!current?.items?.length;
+      }
     });
     let current=null;
     const redraw=()=>{
