@@ -48,11 +48,11 @@
     const suggestionStatus=document.createElement('p');
     suggestionStatus.setAttribute('role','status');
     suggest.addEventListener('click',()=>{
-      const terms=prompt.value.normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLocaleLowerCase('fr')
+      const terms=prompt.value.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('fr')
         .split(/[^a-z0-9]+/).filter(w=>w.length>2 && !['une','des','les','pour','avec','video','videos','montage','reel','faire','moi','2026'].includes(w));
       if(!terms.length){suggestionStatus.textContent='Indique au moins un lieu, un pilote ou un mot présent dans les noms de fichiers.';return;}
       const ranked=all.filter(x=>x.category==='Vidéo'||x.category==='Photo').map(file=>{
-        const name=file.relativePath.normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLocaleLowerCase('fr');
+        const name=file.relativePath.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('fr');
         const score=terms.reduce((total,w)=>total+(name.includes(w)?1:0),0);
         return {file,score};
       }).filter(x=>x.score>0).sort((a,b)=>b.score-a.score||a.file.relativePath.localeCompare(b.file.relativePath,'fr'));
