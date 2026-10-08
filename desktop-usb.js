@@ -154,6 +154,10 @@
     window.addEventListener('rtp1:montage-request',event=>{
       const request=event.detail;
       if(!request||typeof request.instruction!=='string')return;
+      if(!all.length && source){
+        window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{count:0,message:'Aucun média compatible dans le dossier sélectionné. Choisis un autre dossier depuis Library.'}}));
+        return;
+      }
       if(!all.length){
         pendingMontageRequest=request;
         window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{count:0,message:'Sélectionne ton dossier USB : la recherche reprendra automatiquement après son analyse.'}}));
