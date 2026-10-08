@@ -1,0 +1,14 @@
+[package]
+name = "road-to-p1-media-desktop"
+version = "0.1.0"
+description = "Local-only media library shell for Road to P1 Media"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+rfd = "0.15"
+walkdir = "2"
