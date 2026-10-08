@@ -23,6 +23,14 @@
     const result=document.createElement('p');
     result.setAttribute('role','status');
     let waiting=false;
+    const engine=document.createElement('p');
+    engine.setAttribute('role','status');
+    engine.textContent='Vérification du moteur vidéo…';
+    window.__TAURI__.core.invoke('check_video_engine').then(status=>{
+      engine.textContent=status.ffmpegAvailable
+        ?'Moteur MP4 disponible sur ce PC.'
+        :'Moteur MP4 non disponible : FFmpeg devra être intégré à l’application avant de créer les vidéos.';
+    }).catch(()=>{engine.textContent='Impossible de vérifier le moteur vidéo.';});
     action.addEventListener('click',()=>{
       const instruction=prompt.value.trim();
       if(!instruction){result.textContent='Décris le montage que tu souhaites.';return;}
@@ -53,7 +61,7 @@
         result.textContent='Rendu MP4 non terminé : '+String(error)+'. Vérifie notamment que FFmpeg est installé.';
       }finally{action.disabled=false;}
     });
-    panel.append(heading,explanation,prompt,action,result);
+    panel.append(heading,explanation,engine,prompt,action,result);
     studio.prepend(panel);
   });
 })();
