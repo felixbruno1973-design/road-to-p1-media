@@ -17,15 +17,40 @@
     const clear=document.createElement('button');
     clear.type='button';clear.className='btn';clear.textContent='Effacer la préparation';
     clear.disabled=true;
+    const duration=document.createElement('input');
+    duration.type='number';duration.min='5';duration.max='600';duration.value='45';
+    duration.setAttribute('aria-label','Durée cible en secondes');
+    duration.style.cssText='width:90px';
+    const exportButton=document.createElement('button');
+    exportButton.type='button';exportButton.className='btn';exportButton.disabled=true;
+    exportButton.textContent='Exporter le projet JSON';
+    exportButton.addEventListener('click',()=>{
+      if(!current?.items?.length)return;
+      const seconds=Number(duration.value);
+      if(!Number.isFinite(seconds)||seconds<5||seconds>600){note.textContent='Durée invalide (5 à 600 s).';return;}
+      const project={
+        schemaVersion:1,kind:'road-to-p1-usb-draft',createdAt:new Date().toISOString(),
+        sourceLabel:current.source,targetDurationMs:Math.round(seconds*1000),
+        output:{width:1080,height:1920,fps:30},
+        clips:current.items.map((item,i)=>({
+          assetId:'usb-'+i,relativePath:item.relativePath,category:item.category,
+          order:i,inMs:null,outMs:null,durationMs:null
+        }))
+      };
+      const url=URL.createObjectURL(new Blob([JSON.stringify(project,null,2)],{type:'application/json'}));
+      const link=document.createElement('a');
+      link.href=url;link.download='road-to-p1-montage-projet.json';link.click();
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+    });
     let current=null;
     const redraw=()=>{
       list.replaceChildren();
       if (!current?.items?.length) {
         note.textContent='Aucune sélection externe. Dans Library, choisissez des fichiers puis cliquez sur Préparer la sélection Studio.';
-        clear.disabled=true;return;
+        clear.disabled=true;exportButton.disabled=true;return;
       }
       note.textContent=current.items.length+' fichier(s) préparé(s) depuis '+current.source+'. Pas encore de lecture ni de rendu.';
-      clear.disabled=false;
+      clear.disabled=false;exportButton.disabled=false;
       for (const item of current.items) {
         const li=document.createElement('li');
         li.textContent=item.category+' — '+item.relativePath;
@@ -40,7 +65,11 @@
       redraw();
       document.querySelector('[data-view="studio"]')?.click();
     });
-    box.append(heading,note,list,clear);
+    const controls=document.createElement('div');
+    controls.style.cssText='display:flex;align-items:center;gap:8px;flex-wrap:wrap';
+    const label=document.createElement('label');label.textContent='Durée cible (s) : ';
+    label.append(duration);controls.append(label,exportButton,clear);
+    box.append(heading,note,list,controls);
     studio.prepend(box);
   });
 })();
