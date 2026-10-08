@@ -38,13 +38,14 @@
       const targetSeconds=seconds?Math.min(600,Math.max(5,Number(seconds[1]))):45;
       const detail={instruction,targetSeconds,format:/youtube|horizontal|paysage/i.test(instruction)?'16:9':'9:16'};
       waiting=true;
-      window.dispatchEvent(new CustomEvent('rtp1:montage-request',{detail}));
       result.textContent='Recherche du catalogue USB en cours…';
+      window.dispatchEvent(new CustomEvent('rtp1:montage-request',{detail}));
     });
     window.addEventListener('rtp1:montage-selection-result',async event=>{
       const info=event.detail;
       if(info?.message)result.textContent=info.message;
-      if(!waiting||!info?.count)return;
+      if(!waiting)return;
+      if(!info?.count){if(!/Sélectionne ton dossier USB/.test(info?.message||''))waiting=false;return;}
       waiting=false;
       const paths=(info.items||[]).filter(x=>x.category==='Vidéo').slice(0,10).map(x=>x.relativePath);
       if(!paths.length){result.textContent='Aucune vidéo compatible trouvée pour le montage.';return;}
