@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check app.js && node --check worker/index.js && node --check desktop-usb.js && node --check scripts/scan-media.mjs && node --check scripts/prepare-desktop.mjs && node --check studio-usb-bridge.js && node --check scripts/render-local-mp4.mjs && node --check scripts/probe-local-media.mjs",
+    "check": "node --check app.js && node --check worker/index.js && node --check desktop-usb.js && node --check scripts/scan-media.mjs && node --check scripts/prepare-desktop.mjs && node --check studio-usb-bridge.js && node --check scripts/render-local-mp4.mjs && node --check scripts/probe-local-media.mjs && node --check studio-assistant.js",
     "desktop:prepare": "node scripts/prepare-desktop.mjs",
     "desktop:build": "npm run desktop:prepare && cargo tauri build"
   }
