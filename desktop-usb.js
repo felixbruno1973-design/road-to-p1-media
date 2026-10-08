@@ -182,7 +182,7 @@
         source,items:[...selected.values()].map(x=>({relativePath:x.relativePath,category:x.category,sizeBytes:x.sizeBytes}))
       }}));
       window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{
-        count:selected.size,message:selected.size+' média(s) proposés automatiquement à partir des noms de fichiers. La reconnaissance visuelle reste à développer.'
+        count:selected.size,items:[...selected.values()].map(x=>({relativePath:x.relativePath,category:x.category})),message:selected.size+' média(s) trouvés par leur nom. Préparation automatique du MP4…'
       }}));
     });
     panel.append(title,explanation,button,status,suggestControls,suggestionStatus,controls,count,list,more,selectionLabel,studioButton);
