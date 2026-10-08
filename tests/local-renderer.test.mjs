@@ -10,3 +10,10 @@ test('validates local MP4 draft without FFmpeg dependency',()=>{
   assert.throws(()=>validateProject({...draft,clips:[{relativePath:'C:\\hidden.mp4',category:'Vidéo'}]}),/path/);
   assert.throws(()=>validateProject({...draft,clips:[{relativePath:'clip.exe',category:'Exécutable'}]}),/Only videos/);
 });
+
+test('rejects malformed paths and unsupported media categories',()=>{
+  for(const path of ['../outside.mp4','nested/../outside.mp4','/absolute.mp4','C:\\absolute.mp4','nested//video.mp4']){
+    assert.throws(()=>validateProject({...draft,clips:[{relativePath:path,category:'Vidéo'}]}),/path/);
+  }
+  assert.throws(()=>validateProject({...draft,clips:[{relativePath:'video.mp4',category:'Audio'}]}),/Only videos/);
+});
