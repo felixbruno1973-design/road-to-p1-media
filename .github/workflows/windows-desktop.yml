@@ -27,6 +27,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Compile native tests without running Windows installer
         run: cargo test --manifest-path src-tauri/Cargo.toml
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version '^2' --locked
       - name: Build Windows installer
         run: cargo tauri build
       - name: Publish installer as CI artifact
