@@ -7,6 +7,7 @@
     const invoke = window.__TAURI__?.core?.invoke;
     if (!library || !invoke) return;
     let all = [], source = '', page = 0;
+    const selected = new Map();
     const panel = document.createElement('section');
     panel.className = 'panel';
     panel.style.cssText = 'margin:0 0 14px;padding:18px';
@@ -37,6 +38,16 @@
       option.value=value; option.textContent=label; type.append(option);
     }
     const count = document.createElement('p');
+    const selectionLabel=document.createElement('p');
+    const studioButton=document.createElement('button');
+    studioButton.type='button';studioButton.className='btn';studioButton.disabled=true;
+    studioButton.textContent='Préparer la sélection Studio';
+    function selectionStatus(){selectionLabel.textContent=selected.size+' média(s) sélectionné(s)';studioButton.disabled=!selected.size;}
+    studioButton.addEventListener('click',()=>{
+      const detail={source,items:[...selected.values()].map(x=>({relativePath:x.relativePath,category:x.category,sizeBytes:x.sizeBytes}))};
+      window.dispatchEvent(new CustomEvent('rtp1:usb-media-selected',{detail}));
+      selectionLabel.textContent=detail.items.length+' média(s) prêts pour la future liaison Studio (lecture non disponible).';
+    });
     count.setAttribute('aria-live','polite');
     const list = document.createElement('div');
     list.style.cssText = 'max-height:360px;overflow:auto';
@@ -56,10 +67,14 @@
       const shown = Math.min(items.length,(page+1)*PAGE_SIZE);
       list.replaceChildren();
       for(const file of items.slice(0,shown)) {
-        const p=document.createElement('p');
-        p.textContent=file.category+' · '+file.relativePath+' · '+
+        const p=document.createElement('label');
+        p.style.cssText='display:flex;gap:8px;align-items:center;margin:6px 0';
+        const input=document.createElement('input');input.type='checkbox';input.checked=selected.has(file.relativePath);
+        input.addEventListener('change',()=>{if(input.checked)selected.set(file.relativePath,file);else selected.delete(file.relativePath);selectionStatus();});
+        const info=document.createElement('span');
+        info.textContent=file.category+' · '+file.relativePath+' · '+
           (file.sizeBytes/1048576).toLocaleString('fr-FR',{maximumFractionDigits:1})+' Mo';
-        list.append(p);
+        p.append(input,info);list.append(p);
       }
       count.textContent = shown+' / '+items.length+' résultat(s)'+(source?' — '+source:'');
       more.hidden=shown>=items.length;
@@ -73,7 +88,7 @@
       try {
         const result=await invoke('choose_and_scan_folder');
         if(!result) {status.textContent='Sélection annulée.';return;}
-        all=result.files; source=result.sourceName; page=0;
+        all=result.files; source=result.sourceName; page=0;selected.clear();selectionStatus();
         status.textContent=result.totalCount+' média(s) recensé(s)'+
           (result.warnings.length?' • '+result.warnings.length+' avertissement(s)':'');
         render();
@@ -81,8 +96,8 @@
         status.textContent='Analyse impossible : '+String(err);
       } finally {button.disabled=false;}
     });
-    panel.append(title,explanation,button,status,controls,count,list,more);
+    panel.append(title,explanation,button,status,controls,count,list,more,selectionLabel,studioButton);
     library.prepend(panel);
-    render();
+    selectionStatus();render();
   });
 })();
