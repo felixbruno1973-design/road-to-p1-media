@@ -1,0 +1,10 @@
+{
+  "identifier": "default",
+  "description": "Minimal permissions for local desktop interface",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default"
+  ]
+}
