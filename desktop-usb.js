@@ -171,8 +171,9 @@
         const name=normalized(source+' / '+file.relativePath);
         return {file,score:terms.reduce((n,t)=>n+(name.includes(t)?1:0),0)};
       }).filter(x=>x.score>0).sort((a,b)=>b.score-a.score||a.file.relativePath.localeCompare(b.file.relativePath,'fr'));
+      const candidates=ranked.length?ranked:all.filter(x=>x.category==='Vidéo').slice(0,10).map(file=>({file,score:0}));
       selected.clear();
-      for(const entry of ranked.slice(0,30))selected.set(entry.file.relativePath,entry.file);
+      for(const entry of candidates.slice(0,30))selected.set(entry.file.relativePath,entry.file);
       selectionStatus();page=0;render();
       if(!selected.size){
         window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{count:0,message:'Aucun média trouvé par son nom. Les actions filmées ne sont pas encore analysées.'}}));
@@ -182,7 +183,7 @@
         source,items:[...selected.values()].map(x=>({relativePath:x.relativePath,category:x.category,sizeBytes:x.sizeBytes}))
       }}));
       window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{
-        count:selected.size,items:[...selected.values()].map(x=>({relativePath:x.relativePath,category:x.category})),message:selected.size+' média(s) trouvés par leur nom. Préparation automatique du MP4…'
+        count:selected.size,items:[...selected.values()].map(x=>({relativePath:x.relativePath,category:x.category})),message:ranked.length?selected.size+' média(s) trouvés par leur nom. Préparation automatique du MP4…':selected.size+' vidéo(s) proposées faute de correspondance dans les noms. Ce sont les premières du dossier, pas les meilleures actions.'
       }}));
     });
     panel.append(title,explanation,button,status,suggestControls,suggestionStatus,controls,count,list,more,selectionLabel,studioButton);
