@@ -133,10 +133,79 @@ async fn save_studio_project(content: String) -> Result<Option<String>, String> 
     }).await.map_err(|e| format!("Erreur système : {e}"))?
 }
 
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RenderRequest {
+    relative_paths: Vec<String>,
+    target_seconds: u32,
+}
+
+#[tauri::command]
+async fn render_auto_montage(state: tauri::State<'_, SelectedFolder>, request: RenderRequest) -> Result<Option<String>, String> {
+    let root = state.0.lock().map_err(|_| "Dossier USB indisponible.")?
+      .clone().ok_or("Choisis d'abord un dossier USB.")?;
+    if request.relative_paths.is_empty() || request.relative_paths.len() > 30 ||
+       request.target_seconds < 5 || request.target_seconds > 600 {
+        return Err("Sélection ou durée invalide (1 à 30 vidéos, 5 à 600 secondes).".into());
+    }
+    let Some(output) = rfd::FileDialog::new()
+        .add_filter("Vidéo MP4", &["mp4"])
+        .set_file_name("road-to-p1-montage.mp4")
+        .save_file() else { return Ok(None); };
+    if output.extension().and_then(|s|s.to_str()).map(|s|s.eq_ignore_ascii_case("mp4")) != Some(true) {
+        return Err("La sortie doit être un fichier MP4.".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let root = root.canonicalize().map_err(|e|e.to_string())?;
+        let parent=output.parent().ok_or("Dossier de sortie invalide.")?
+            .canonicalize().map_err(|e|e.to_string())?;
+        if parent.starts_with(&root) {return Err("Choisis un dossier de sortie en dehors des vidéos USB.".into());}
+        let temp=tempfile::tempdir().map_err(|e|e.to_string())?;
+        let mut segments=Vec::new();
+        let seconds_per_clip=request.target_seconds as f64 / request.relative_paths.len() as f64;
+        for (index,path) in request.relative_paths.iter().enumerate() {
+            let rel=Path::new(path);
+            if rel.is_absolute() || rel.components().any(|p|!matches!(p,std::path::Component::Normal(_))) ||
+               kind(rel)!=Some("Vidéo") {
+                return Err("Nom de vidéo non autorisé.".into());
+            }
+            let file=root.join(rel).canonicalize().map_err(|e|e.to_string())?;
+            if !file.starts_with(&root) || !file.is_file() {
+                return Err("Vidéo inaccessible dans le dossier USB.".into());
+            }
+            let segment=temp.path().join(format!("clip-{index:04}.mp4"));
+            let status=Command::new("ffmpeg")
+                .args(["-hide_banner","-loglevel","error","-y","-i"])
+                .arg(&file).args(["-t",&seconds_per_clip.to_string(),"-vf",
+                    "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30",
+                    "-an","-c:v","libx264","-pix_fmt","yuv420p","-preset","veryfast"])
+                .arg(&segment)
+                .status().map_err(|e|format!("FFmpeg doit être installé sur le PC : {e}"))?;
+            if !status.success() {return Err(format!("Erreur FFmpeg sur la vidéo {}",index+1));}
+            segments.push(segment);
+        }
+        let concat=temp.path().join("concat.txt");
+        let entries=segments.iter().map(|p|{
+            let s=p.to_string_lossy().replace('\\',"/");
+            format!("file '{}'",s.replace("'","'\\''"))
+        }).collect::<Vec<_>>().join("\n");
+        std::fs::write(&concat,entries).map_err(|e|e.to_string())?;
+        let tmp_output=temp.path().join("montage.mp4");
+        let status=Command::new("ffmpeg")
+            .args(["-hide_banner","-loglevel","error","-y","-f","concat","-safe","0","-i"])
+            .arg(&concat).args(["-c","copy","-movflags","+faststart"]).arg(&tmp_output)
+            .status().map_err(|e|e.to_string())?;
+        if !status.success(){return Err("Assemblage vidéo impossible.".into());}
+        std::fs::copy(&tmp_output,&output).map_err(|e|format!("Enregistrement MP4 impossible : {e}"))?;
+        Ok(Some(output.to_string_lossy().to_string()))
+    }).await.map_err(|e|format!("Erreur de rendu : {e}"))?
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(SelectedFolder::default())
-        .invoke_handler(tauri::generate_handler![choose_and_scan_folder, save_studio_project, probe_selected_video])
+        .invoke_handler(tauri::generate_handler![choose_and_scan_folder, save_studio_project, probe_selected_video, render_auto_montage])
         .run(tauri::generate_context!())
         .expect("Erreur au lancement de Road to P1 Media");
 }
