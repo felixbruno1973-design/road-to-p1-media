@@ -33,10 +33,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-      - name: Compile native tests without running Windows installer
-        run: cargo test --manifest-path src-tauri/Cargo.toml
-      - name: Install Tauri CLI
-        run: cargo install tauri-cli --version '^2' --locked
       - name: Bundle local video engine
         shell: pwsh
         run: |
@@ -48,6 +44,10 @@ jobs:
             Copy-Item $binary.FullName ("src-tauri/resources/" + $name + ".exe") -Force
             & ("src-tauri/resources/" + $name + ".exe") -version | Select-Object -First 1
           }
+      - name: Compile native tests without running Windows installer
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version '^2' --locked
       - name: Build Windows installer
         run: cargo tauri build
       - name: Publish installer as CI artifact
