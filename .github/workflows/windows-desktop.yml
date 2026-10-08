@@ -4,6 +4,10 @@ on:
     paths:
       - 'src-tauri/**'
       - 'desktop-usb.js'
+      - 'studio-assistant.js'
+      - 'studio-usb-bridge.js'
+      - 'scripts/render-local-mp4.mjs'
+      - 'tests/**'
       - 'scripts/prepare-desktop.mjs'
       - 'scripts/generate-windows-icon.mjs'
       - 'package.json'
