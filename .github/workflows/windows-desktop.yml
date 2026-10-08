@@ -5,6 +5,7 @@ on:
       - 'src-tauri/**'
       - 'desktop-usb.js'
       - 'scripts/prepare-desktop.mjs'
+      - 'scripts/generate-windows-icon.mjs'
       - 'package.json'
       - '.github/workflows/windows-desktop.yml'
   workflow_dispatch:
@@ -26,3 +27,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Compile native tests without running Windows installer
         run: cargo test --manifest-path src-tauri/Cargo.toml
+      - name: Build Windows installer
+        run: cargo tauri build
+      - name: Publish installer as CI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: road-to-p1-media-windows-prototype
+          path: src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
