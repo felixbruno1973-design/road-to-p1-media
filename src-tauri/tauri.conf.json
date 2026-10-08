@@ -1,0 +1,27 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Road to P1 Media",
+  "version": "0.1.0",
+  "identifier": "com.roadtop1.media",
+  "build": {
+    "frontendDist": ".."
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "Road to P1 Media",
+        "width": 1360,
+        "height": 860,
+        "minWidth": 960,
+        "minHeight": 600
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ]
+  }
+}
