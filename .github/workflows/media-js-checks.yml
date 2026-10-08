@@ -1,0 +1,23 @@
+name: Road to P1 Media — JS checks
+on:
+  pull_request:
+    paths:
+      - '**/*.js'
+      - '**/*.mjs'
+      - 'package.json'
+      - '.github/workflows/media-js-checks.yml'
+  workflow_dispatch:
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate JavaScript syntax
+        run: npm run check
+      - name: Run test suite
+        run: npm test
+      - name: Prepare desktop assets
+        run: npm run desktop:prepare
