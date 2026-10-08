@@ -52,7 +52,9 @@ jobs:
           & $ffmpeg -hide_banner -loglevel error -y -f lavfi -i "color=c=blue:s=320x180:r=30" -t 1 -an -c:v libx264 -pix_fmt yuv420p "$env:RUNNER_TEMP/test-montage.mp4"
           if ($LASTEXITCODE -ne 0) { throw 'Local MP4 encoding failed' }
           $duration = & $ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$env:RUNNER_TEMP/test-montage.mp4"
-          if ($LASTEXITCODE -ne 0 -or -not [double]::TryParse(($duration -join '').Trim(), [ref]([double]$number = 0))) { throw 'Local MP4 probing failed' }
+          if ($LASTEXITCODE -ne 0) { throw 'Local MP4 probing failed' }
+          $seconds = [double]::Parse(($duration -join '').Trim(), [System.Globalization.CultureInfo]::InvariantCulture)
+          if ($seconds -lt 0.5) { throw 'Output MP4 too short' }
       - name: Compile native tests without running Windows installer
         run: cargo test --manifest-path src-tauri/Cargo.toml
       - name: Install Tauri CLI
