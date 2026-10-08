@@ -134,6 +134,15 @@ async fn save_studio_project(content: String) -> Result<Option<String>, String> 
 }
 
 
+#[tauri::command]
+async fn check_video_engine() -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let ffmpeg = Command::new("ffmpeg").arg("-version").output().is_ok_and(|x| x.status.success());
+        let ffprobe = Command::new("ffprobe").arg("-version").output().is_ok_and(|x| x.status.success());
+        Ok(serde_json::json!({"ffmpegAvailable": ffmpeg, "ffprobeAvailable": ffprobe}))
+    }).await.map_err(|e|e.to_string())?
+}
+
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RenderRequest {
@@ -205,7 +214,7 @@ async fn render_auto_montage(state: tauri::State<'_, SelectedFolder>, request: R
 fn main() {
     tauri::Builder::default()
         .manage(SelectedFolder::default())
-        .invoke_handler(tauri::generate_handler![choose_and_scan_folder, save_studio_project, probe_selected_video, render_auto_montage])
+        .invoke_handler(tauri::generate_handler![choose_and_scan_folder, save_studio_project, probe_selected_video, render_auto_montage, check_video_engine])
         .run(tauri::generate_context!())
         .expect("Erreur au lancement de Road to P1 Media");
 }
