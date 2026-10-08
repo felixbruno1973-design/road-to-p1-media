@@ -4,6 +4,7 @@ use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::process::Command;
+use tauri::Manager;
 use std::time::UNIX_EPOCH;
 use walkdir::WalkDir;
 
@@ -37,10 +38,18 @@ fn kind(path: &Path) -> Option<&'static str> {
 #[derive(Default)]
 struct SelectedFolder(Mutex<Option<PathBuf>>);
 
+fn video_tool(app: &tauri::AppHandle, name: &str) -> Result<PathBuf, String> {
+    let dir=app.path().resource_dir().map_err(|e|e.to_string())?;
+    let binary=dir.join("resources").join(format!("{name}.exe"));
+    if binary.is_file() { Ok(binary) }
+    else { Err(format!("Moteur vidéo intégré absent : {name}.exe")) }
+}
+
 #[tauri::command]
-async fn probe_selected_video(state: tauri::State<'_, SelectedFolder>, relative_path: String) -> Result<serde_json::Value, String> {
+async fn probe_selected_video(app: tauri::AppHandle, state: tauri::State<'_, SelectedFolder>, relative_path: String) -> Result<serde_json::Value, String> {
     let root = state.0.lock().map_err(|_| "Verrou du dossier indisponible.")?
         .clone().ok_or("Choisis d'abord un dossier USB dans Library.")?;
+    let probe=video_tool(&app, "ffprobe")?;
     tauri::async_runtime::spawn_blocking(move || {
         let rel = Path::new(&relative_path);
         if rel.is_absolute() || rel.components().any(|part| !matches!(part, std::path::Component::Normal(_))) {
@@ -49,7 +58,7 @@ async fn probe_selected_video(state: tauri::State<'_, SelectedFolder>, relative_
         if kind(rel) != Some("Vidéo") { return Err("Ce fichier n'est pas une vidéo reconnue.".into()); }
         let file = root.join(rel).canonicalize().map_err(|e| e.to_string())?;
         if !file.starts_with(&root) || !file.is_file() { return Err("Fichier hors du dossier autorisé.".into()); }
-        let output = Command::new("ffprobe").args(["-v","error","-show_entries",
+        let output = Command::new(&probe).args(["-v","error","-show_entries",
           "format=duration:stream=codec_type,codec_name,width,height,avg_frame_rate",
           "-of","json"]).arg(&file).output().map_err(|e|
           format!("FFprobe indisponible sur ce PC : {e}"))?;
@@ -135,10 +144,12 @@ async fn save_studio_project(content: String) -> Result<Option<String>, String> 
 
 
 #[tauri::command]
-async fn check_video_engine() -> Result<serde_json::Value, String> {
-    tauri::async_runtime::spawn_blocking(|| {
-        let ffmpeg = Command::new("ffmpeg").arg("-version").output().is_ok_and(|x| x.status.success());
-        let ffprobe = Command::new("ffprobe").arg("-version").output().is_ok_and(|x| x.status.success());
+async fn check_video_engine(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let ffmpeg=video_tool(&app,"ffmpeg").is_ok();
+    let ffprobe=video_tool(&app,"ffprobe").is_ok();
+    tauri::async_runtime::spawn_blocking(move || {
+        let ffmpeg = ffmpeg;
+        let ffprobe = ffprobe;
         Ok(serde_json::json!({"ffmpegAvailable": ffmpeg, "ffprobeAvailable": ffprobe}))
     }).await.map_err(|e|e.to_string())?
 }
@@ -151,7 +162,7 @@ struct RenderRequest {
 }
 
 #[tauri::command]
-async fn render_auto_montage(state: tauri::State<'_, SelectedFolder>, request: RenderRequest) -> Result<Option<String>, String> {
+async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, SelectedFolder>, request: RenderRequest) -> Result<Option<String>, String> {
     let root = state.0.lock().map_err(|_| "Dossier USB indisponible.")?
       .clone().ok_or("Choisis d'abord un dossier USB.")?;
     if request.relative_paths.is_empty() || request.relative_paths.len() > 30 ||
@@ -165,6 +176,7 @@ async fn render_auto_montage(state: tauri::State<'_, SelectedFolder>, request: R
     if output.extension().and_then(|s|s.to_str()).map(|s|s.eq_ignore_ascii_case("mp4")) != Some(true) {
         return Err("La sortie doit être un fichier MP4.".into());
     }
+    let encoder=video_tool(&app,"ffmpeg")?;
     tauri::async_runtime::spawn_blocking(move || {
         let root = root.canonicalize().map_err(|e|e.to_string())?;
         let parent=output.parent().ok_or("Dossier de sortie invalide.")?
@@ -184,7 +196,7 @@ async fn render_auto_montage(state: tauri::State<'_, SelectedFolder>, request: R
                 return Err("Vidéo inaccessible dans le dossier USB.".into());
             }
             let segment=temp.path().join(format!("clip-{index:04}.mp4"));
-            let status=Command::new("ffmpeg")
+            let status=Command::new(&encoder)
                 .args(["-hide_banner","-loglevel","error","-y","-i"])
                 .arg(&file).args(["-t",&seconds_per_clip.to_string(),"-vf",
                     "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30",
@@ -201,7 +213,7 @@ async fn render_auto_montage(state: tauri::State<'_, SelectedFolder>, request: R
         }).collect::<Vec<_>>().join("\n");
         std::fs::write(&concat,entries).map_err(|e|e.to_string())?;
         let tmp_output=temp.path().join("montage.mp4");
-        let status=Command::new("ffmpeg")
+        let status=Command::new(&encoder)
             .args(["-hide_banner","-loglevel","error","-y","-f","concat","-safe","0","-i"])
             .arg(&concat).args(["-c","copy","-movflags","+faststart"]).arg(&tmp_output)
             .status().map_err(|e|e.to_string())?;
