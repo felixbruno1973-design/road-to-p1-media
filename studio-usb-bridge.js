@@ -47,6 +47,10 @@
         exportButton.disabled=!current?.items?.length;
       }
     });
+    window.addEventListener('rtp1:montage-request',event=>{
+      const seconds=event.detail?.targetSeconds;
+      if(Number.isFinite(seconds)&&seconds>=5&&seconds<=600)duration.value=String(seconds);
+    });
     let current=null;
     const redraw=()=>{
       list.replaceChildren();
