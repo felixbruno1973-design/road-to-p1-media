@@ -1,7 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use serde::Serialize;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::UNIX_EPOCH;
 use walkdir::WalkDir;
 
@@ -33,10 +33,15 @@ fn kind(path: &Path) -> Option<&'static str> {
 }
 
 #[tauri::command]
-fn choose_and_scan_folder() -> Result<Option<ScanResult>, String> {
-    // Native user interaction is the authorization boundary.
-    let Some(root) = rfd::FileDialog::new().pick_folder() else { return Ok(None); };
-    scan(&root).map(Some)
+async fn choose_and_scan_folder() -> Result<Option<ScanResult>, String> {
+    // Disk traversal runs off the Tauri UI thread.
+    tauri::async_runtime::spawn_blocking(|| {
+        // Explicit user selection grants access to this folder only.
+        let Some(root) = rfd::FileDialog::new().pick_folder() else { return Ok(None); };
+        scan(&root).map(Some)
+    })
+    .await
+    .map_err(|error| format!("Erreur du processus d'indexation : {error}"))?
 }
 
 fn scan(root: &Path) -> Result<ScanResult, String> {
