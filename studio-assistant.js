@@ -12,14 +12,14 @@
     const heading=document.createElement('h3');
     heading.textContent='Assistant vidéo — donne ton objectif';
     const explanation=document.createElement('p');
-    explanation.textContent='Première version : prépare une proposition locale à partir des noms des médias. Elle ne reconnaît pas encore les actions filmées et ne crée pas encore de MP4.';
+    explanation.textContent='Prototype : recherche les vidéos par nom sur le disque USB et tente de générer un MP4 local avec FFmpeg. Ne reconnaît pas encore les actions filmées ; FFmpeg doit être installé.';
     const prompt=document.createElement('textarea');
     prompt.rows=3;prompt.style.cssText='width:100%;min-height:80px';
     prompt.placeholder='Fais-moi un Reel de 45 secondes de Lara à Annéville 2026.';
     prompt.setAttribute('aria-label','Ton objectif de montage vidéo');
     const action=document.createElement('button');
     action.className='btn primary';action.type='button';
-    action.textContent='Préparer automatiquement mon montage';
+    action.textContent='Créer mon premier montage MP4';
     const result=document.createElement('p');
     result.setAttribute('role','status');
     let waiting=false;
