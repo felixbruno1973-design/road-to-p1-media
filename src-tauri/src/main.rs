@@ -1,7 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use serde::Serialize;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use std::process::Command;
+use tauri::Manager;
 use std::time::UNIX_EPOCH;
 use walkdir::WalkDir;
 
@@ -32,16 +35,54 @@ fn kind(path: &Path) -> Option<&'static str> {
     }
 }
 
+#[derive(Default)]
+struct SelectedFolder(Mutex<Option<PathBuf>>);
+
 #[tauri::command]
-async fn choose_and_scan_folder() -> Result<Option<ScanResult>, String> {
+async fn probe_selected_video(state: tauri::State<'_, SelectedFolder>, relative_path: String) -> Result<serde_json::Value, String> {
+    let root = state.0.lock().map_err(|_| "Verrou du dossier indisponible.")?
+        .clone().ok_or("Choisis d'abord un dossier USB dans Library.")?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let rel = Path::new(&relative_path);
+        if rel.is_absolute() || rel.components().any(|part| !matches!(part, std::path::Component::Normal(_))) {
+            return Err("Chemin relatif invalide.".into());
+        }
+        if kind(rel) != Some("Vidéo") { return Err("Ce fichier n'est pas une vidéo reconnue.".into()); }
+        let file = root.join(rel).canonicalize().map_err(|e| e.to_string())?;
+        if !file.starts_with(&root) || !file.is_file() { return Err("Fichier hors du dossier autorisé.".into()); }
+        let output = Command::new("ffprobe").args(["-v","error","-show_entries",
+          "format=duration:stream=codec_type,codec_name,width,height,avg_frame_rate",
+          "-of","json"]).arg(&file).output().map_err(|e|
+          format!("FFprobe indisponible sur ce PC : {e}"))?;
+        if !output.status.success() { return Err("Analyse FFprobe impossible pour cette vidéo.".into()); }
+        let data: serde_json::Value = serde_json::from_slice(&output.stdout).map_err(|e|e.to_string())?;
+        let video = data["streams"].as_array().and_then(|xs|xs.iter().find(|s|s["codec_type"]=="video"))
+          .ok_or("Flux vidéo introuvable.")?;
+        Ok(serde_json::json!({
+          "durationSeconds":data["format"]["duration"].as_str().and_then(|s|s.parse::<f64>().ok()),
+          "width": video["width"],"height":video["height"],
+          "codec":video["codec_name"],"frameRate":video["avg_frame_rate"],
+          "hasAudio":data["streams"].as_array().map(|xs|xs.iter().any(|s|s["codec_type"]=="audio")).unwrap_or(false)
+        }))
+    }).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn choose_and_scan_folder(state: tauri::State<'_, SelectedFolder>) -> Result<Option<ScanResult>, String> {
     // Disk traversal runs off the Tauri UI thread.
-    tauri::async_runtime::spawn_blocking(|| {
+    let chosen = tauri::async_runtime::spawn_blocking(|| {
         // Explicit user selection grants access to this folder only.
         let Some(root) = rfd::FileDialog::new().pick_folder() else { return Ok(None); };
-        scan(&root).map(Some)
+        let canonical = root.canonicalize().map_err(|e|e.to_string())?;
+        scan(&canonical).map(|result|Some((result,canonical)))
     })
     .await
-    .map_err(|error| format!("Erreur du processus d'indexation : {error}"))?
+    .map_err(|error| format!("Erreur du processus d'indexation : {error}"))?;
+    if let Some((ref result, ref root)) = chosen {
+        let _ = result;
+        *state.0.lock().map_err(|_| "Verrou du dossier indisponible.")? = Some(root.clone());
+    }
+    Ok(chosen.map(|(result, _)| result))
 }
 
 fn scan(root: &Path) -> Result<ScanResult, String> {
@@ -96,7 +137,8 @@ async fn save_studio_project(content: String) -> Result<Option<String>, String> 
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![choose_and_scan_folder, save_studio_project])
+        .manage(SelectedFolder::default())
+        .invoke_handler(tauri::generate_handler![choose_and_scan_folder, save_studio_project, probe_selected_video])
         .run(tauri::generate_context!())
         .expect("Erreur au lancement de Road to P1 Media");
 }
