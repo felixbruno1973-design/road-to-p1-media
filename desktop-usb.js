@@ -103,7 +103,26 @@
         const info=document.createElement('span');
         info.textContent=file.category+' · '+file.relativePath+' · '+
           (file.sizeBytes/1048576).toLocaleString('fr-FR',{maximumFractionDigits:1})+' Mo';
-        p.append(input,info);list.append(p);
+        p.append(input,info);
+        if(file.category==='Vidéo') {
+          const inspect=document.createElement('button');
+          inspect.type='button';inspect.className='btn';
+          inspect.textContent='Infos vidéo';
+          const details=document.createElement('span');
+          details.setAttribute('aria-live','polite');
+          inspect.addEventListener('click',async event=>{
+            event.preventDefault();
+            inspect.disabled=true;details.textContent='Analyse…';
+            try {
+              const m=await invoke('probe_selected_video',{relativePath:file.relativePath});
+              const time=m.durationSeconds==null?'durée inconnue':Math.round(m.durationSeconds)+' s';
+              details.textContent=[time,m.width&&m.height?m.width+' × '+m.height:null,m.codec,m.frameRate?m.frameRate+' ips':null,m.hasAudio?'avec son':'sans son'].filter(Boolean).join(' · ');
+            }catch(error){details.textContent='Analyse indisponible : '+String(error)}
+            finally {inspect.disabled=false;}
+          });
+          p.append(inspect,details);
+        }
+        list.append(p);
       }
       count.textContent = shown+' / '+items.length+' résultat(s)'+(source?' — '+source:'');
       more.hidden=shown>=items.length;
