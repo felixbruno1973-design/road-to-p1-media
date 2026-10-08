@@ -4,7 +4,6 @@ use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::process::Command;
-use tauri::Manager;
 use std::time::UNIX_EPOCH;
 use walkdir::WalkDir;
 
@@ -78,8 +77,7 @@ async fn choose_and_scan_folder(state: tauri::State<'_, SelectedFolder>) -> Resu
     })
     .await
     .map_err(|error| format!("Erreur du processus d'indexation : {error}"))?;
-    if let Some((ref result, ref root)) = chosen {
-        let _ = result;
+    if let Some((_, ref root)) = chosen {
         *state.0.lock().map_err(|_| "Verrou du dossier indisponible.")? = Some(root.clone());
     }
     Ok(chosen.map(|(result, _)| result))
