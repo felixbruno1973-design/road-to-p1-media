@@ -43,8 +43,9 @@ jobs:
           choco install ffmpeg -y --no-progress
           New-Item -ItemType Directory -Force src-tauri/resources | Out-Null
           foreach ($name in @('ffmpeg','ffprobe')) {
-            $binary = (Get-Command ($name + '.exe') -ErrorAction Stop).Source
-            Copy-Item $binary ("src-tauri/resources/" + $name + ".exe") -Force
+            $binary = Get-ChildItem 'C:/ProgramData/chocolatey/lib/ffmpeg/tools' -Filter ($name + '.exe') -Recurse -File | Select-Object -First 1
+            if (-not $binary) { throw ('Missing actual FFmpeg binary: ' + $name) }
+            Copy-Item $binary.FullName ("src-tauri/resources/" + $name + ".exe") -Force
             & ("src-tauri/resources/" + $name + ".exe") -version | Select-Object -First 1
           }
       - name: Build Windows installer
