@@ -1,0 +1,28 @@
+name: Windows desktop validation
+on:
+  pull_request:
+    paths:
+      - 'src-tauri/**'
+      - 'desktop-usb.js'
+      - 'scripts/prepare-desktop.mjs'
+      - 'package.json'
+      - '.github/workflows/windows-desktop.yml'
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prepare desktop frontend
+        run: npm run desktop:prepare
+      - name: Check JavaScript
+        run: npm run check
+      - name: Test JavaScript
+        run: npm test
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Compile native tests without running Windows installer
+        run: cargo test --manifest-path src-tauri/Cargo.toml
