@@ -37,6 +37,35 @@
       const option = document.createElement('option');
       option.value=value; option.textContent=label; type.append(option);
     }
+    const prompt=document.createElement('input');
+    prompt.className='search';
+    prompt.placeholder='Ex. Lara Annéville 2026 dépassement';
+    prompt.setAttribute('aria-label','Décrire les vidéos à rechercher localement');
+    prompt.style.cssText='min-width:250px;max-width:440px';
+    const suggest=document.createElement('button');
+    suggest.type='button';suggest.className='btn';
+    suggest.textContent='Proposer une sélection locale';
+    const suggestionStatus=document.createElement('p');
+    suggestionStatus.setAttribute('role','status');
+    suggest.addEventListener('click',()=>{
+      const terms=prompt.value.normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLocaleLowerCase('fr')
+        .split(/[^a-z0-9]+/).filter(w=>w.length>2 && !['une','des','les','pour','avec','video','videos','montage','reel','faire','moi','2026'].includes(w));
+      if(!terms.length){suggestionStatus.textContent='Indique au moins un lieu, un pilote ou un mot présent dans les noms de fichiers.';return;}
+      const ranked=all.filter(x=>x.category==='Vidéo'||x.category==='Photo').map(file=>{
+        const name=file.relativePath.normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLocaleLowerCase('fr');
+        const score=terms.reduce((total,w)=>total+(name.includes(w)?1:0),0);
+        return {file,score};
+      }).filter(x=>x.score>0).sort((a,b)=>b.score-a.score||a.file.relativePath.localeCompare(b.file.relativePath,'fr'));
+      selected.clear();
+      for(const x of ranked.slice(0,30))selected.set(x.file.relativePath,x.file);
+      suggestionStatus.textContent=ranked.length
+        ?selected.size+' résultat(s) proposés à partir des noms de fichiers et dossiers. Vérifie la sélection avant Studio : aucune analyse des images.'
+        :'Aucun nom de fichier ou dossier ne correspond à cette demande.';
+      selectionStatus();page=0;render();
+    });
+    const suggestControls=document.createElement('div');
+    suggestControls.style.cssText='display:flex;gap:8px;flex-wrap:wrap;margin:8px 0';
+    suggestControls.append(prompt,suggest);
     const count = document.createElement('p');
     const selectionLabel=document.createElement('p');
     const studioButton=document.createElement('button');
@@ -96,7 +125,7 @@
         status.textContent='Analyse impossible : '+String(err);
       } finally {button.disabled=false;}
     });
-    panel.append(title,explanation,button,status,controls,count,list,more,selectionLabel,studioButton);
+    panel.append(title,explanation,button,status,suggestControls,suggestionStatus,controls,count,list,more,selectionLabel,studioButton);
     library.prepend(panel);
     selectionStatus();render();
   });
