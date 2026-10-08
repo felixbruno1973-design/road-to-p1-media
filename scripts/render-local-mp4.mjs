@@ -4,6 +4,7 @@ import {readFile,writeFile,mkdtemp,rm,realpath,stat} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {resolve,dirname,join,relative,isAbsolute} from 'node:path';
 import {spawn} from 'node:child_process';
+import {pathToFileURL} from 'node:url';
 
 export function validateProject(project){
   if(project?.kind!=='road-to-p1-usb-draft'||!Array.isArray(project.clips)||!project.clips.length||project.clips.length>100)throw Error('Invalid project or clip count');
@@ -32,6 +33,9 @@ export async function render(project,{root,output,ffmpeg='ffmpeg'}){
   const relOut=relative(base,target);
   if(!relOut.startsWith('..')&&!isAbsolute(relOut))throw Error('Output must be outside USB source root');
   if(!target.toLowerCase().endsWith('.mp4'))throw Error('Output must be .mp4');
+  const outputDir=await realpath(dirname(target));
+  const relativeDir=relative(base,outputDir);
+  if(!relativeDir.startsWith('..')&&!isAbsolute(relativeDir))throw Error('Output folder must be outside USB source root');
   const count=project.clips.length;
   const secondsPerClip=(project.targetDurationMs/1000)/count;
   const work=await mkdtemp(join(tmpdir(),'rtp1-render-'));
@@ -68,6 +72,6 @@ export async function main(args=process.argv.slice(2)){
   const project=JSON.parse(await readFile(projectPath,'utf8'));
   return render(project,{root,output,ffmpeg:val('--ffmpeg')||'ffmpeg'});
 }
-if(process.argv[1]&&import.meta.url===new URL('file:///'+resolve(process.argv[1]).replaceAll('\\','/')).href){
+if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
   main().then(path=>console.log('MP4 created:',path)).catch(e=>{console.error(e.message);process.exitCode=1});
 }
