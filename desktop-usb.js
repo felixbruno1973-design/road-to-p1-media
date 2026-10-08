@@ -155,7 +155,7 @@
       const terms=normalized(request.instruction).split(/[^a-z0-9]+/).filter(w=>w.length>2&&
         !['fais','moi','une','des','les','avec','video','videos','reel','montage','secondes','seconde','sec','plus','meilleurs','meilleures','moments','pour','format','instagram','tiktok','musique','dynamique'].includes(w)&&!/^[0-9]{1,3}$/.test(w));
       const ranked=all.filter(x=>x.category==='Vidéo'||x.category==='Photo').map(file=>{
-        const name=normalized(file.relativePath);
+        const name=normalized(source+' / '+file.relativePath);
         return {file,score:terms.reduce((n,t)=>n+(name.includes(t)?1:0),0)};
       }).filter(x=>x.score>0).sort((a,b)=>b.score-a.score||a.file.relativePath.localeCompare(b.file.relativePath,'fr'));
       selected.clear();
