@@ -75,9 +75,28 @@ fn scan(root: &Path) -> Result<ScanResult, String> {
     Ok(ScanResult {source_name,total_count:files.len(),files,warnings})
 }
 
+
+#[tauri::command]
+async fn save_studio_project(content: String) -> Result<Option<String>, String> {
+    if content.len() > 1_000_000 || !content.contains("\"road-to-p1-usb-draft\"") {
+        return Err("Projet invalide ou trop volumineux.".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(target) = rfd::FileDialog::new()
+            .add_filter("Projet Road to P1", &["json"])
+            .set_file_name("road-to-p1-montage-projet.json")
+            .save_file() else { return Ok(None); };
+        if target.extension().and_then(|x| x.to_str()).map(|x| x.eq_ignore_ascii_case("json")) != Some(true) {
+            return Err("Le fichier doit porter l'extension .json.".into());
+        }
+        std::fs::write(&target, content).map_err(|e| format!("Enregistrement impossible : {e}"))?;
+        Ok(Some(target.to_string_lossy().to_string()))
+    }).await.map_err(|e| format!("Erreur système : {e}"))?
+}
+
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![choose_and_scan_folder])
+        .invoke_handler(tauri::generate_handler![choose_and_scan_folder, save_studio_project])
         .run(tauri::generate_context!())
         .expect("Erreur au lancement de Road to P1 Media");
 }
