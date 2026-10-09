@@ -1,0 +1,69 @@
+name: Windows desktop validation
+on:
+  pull_request:
+    paths:
+      - 'src-tauri/**'
+      - 'desktop-usb.js'
+      - 'studio-assistant.js'
+      - 'studio-usb-bridge.js'
+      - 'scripts/render-local-mp4.mjs'
+      - 'tests/**'
+      - 'scripts/prepare-desktop.mjs'
+      - 'scripts/generate-windows-icon.mjs'
+      - 'package.json'
+      - '.github/workflows/windows-desktop.yml'
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prepare desktop frontend
+        run: npm run desktop:prepare
+      - name: Check JavaScript
+        run: npm run check
+      - name: Test JavaScript
+        run: npm test
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Bundle local video engine
+        shell: pwsh
+        run: |
+          choco install ffmpeg -y --no-progress
+          New-Item -ItemType Directory -Force src-tauri/resources | Out-Null
+          foreach ($name in @('ffmpeg','ffprobe')) {
+            $binary = Get-ChildItem 'C:/ProgramData/chocolatey/lib/ffmpeg/tools' -Filter ($name + '.exe') -Recurse -File | Select-Object -First 1
+            if (-not $binary) { throw ('Missing actual FFmpeg binary: ' + $name) }
+            Copy-Item $binary.FullName ("src-tauri/resources/" + $name + ".exe") -Force
+            & ("src-tauri/resources/" + $name + ".exe") -version | Select-Object -First 1
+          }
+      - name: Smoke-test bundled MP4 engine
+        shell: pwsh
+        run: |
+          $ffmpeg = "src-tauri/resources/ffmpeg.exe"
+          $ffprobe = "src-tauri/resources/ffprobe.exe"
+          & $ffmpeg -hide_banner -loglevel error -y -f lavfi -i "color=c=blue:s=320x180:r=30" -t 1 -an -c:v libx264 -pix_fmt yuv420p "$env:RUNNER_TEMP/test-montage.mp4"
+          if ($LASTEXITCODE -ne 0) { throw 'Local MP4 encoding failed' }
+          $duration = & $ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$env:RUNNER_TEMP/test-montage.mp4"
+          if ($LASTEXITCODE -ne 0) { throw 'Local MP4 probing failed' }
+          $seconds = [double]::Parse(($duration -join '').Trim(), [System.Globalization.CultureInfo]::InvariantCulture)
+          if ($seconds -lt 0.5) { throw 'Output MP4 too short' }
+      - name: Compile native tests without running Windows installer
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version '^2' --locked
+      - name: Build Windows installer
+        run: cargo tauri build
+      - name: Publish installer as CI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: road-to-p1-media-windows-prototype
+          path: src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
