@@ -154,6 +154,20 @@ async fn check_video_engine(app: tauri::AppHandle) -> Result<serde_json::Value, 
     }).await.map_err(|e|e.to_string())?
 }
 
+fn pick_visual_change(stderr: &str, fallback: f64, max_start: f64) -> f64 {
+    let mut times=Vec::new();
+    for line in stderr.lines() {
+        if let Some(start)=line.find("pts_time:") {
+            let value=&line[start+9..];
+            let value=value.split_whitespace().next().unwrap_or("");
+            if let Ok(time)=value.parse::<f64>() {
+                if time.is_finite() && time>=0.0 && time<=max_start {times.push(time);}
+            }
+        }
+    }
+    if times.is_empty() {fallback} else {times[times.len()/2]}
+}
+
 fn montage_plan(total_seconds: u32, input_count: usize) -> Vec<(usize, f64)> {
     let count=((total_seconds as f64 / 5.0).ceil() as usize).max(input_count);
     let count=count.min(120);
@@ -219,7 +233,20 @@ async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, Sele
             if !duration.is_finite() || duration <= 0.0 {return Err("Durée vidéo invalide.".into());}
             let clip_seconds=seconds_per_clip.min(duration).max(0.1);
             // Temporal sampling only, not recognition of racing actions.
-            let start=sample_start(duration,clip_seconds,index);
+            let fallback=sample_start(duration,clip_seconds,index);
+            // Lightweight local change-point detection, not human/action recognition.
+            // Sampling is capped at 90 seconds to avoid scanning whole recordings.
+            let inspect=duration.min(90.0);
+            let analysis=Command::new(&encoder)
+                .args(["-hide_banner","-nostdin","-loglevel","info","-t",&inspect.to_string(),"-i"])
+                .arg(&file).args(["-vf","fps=2,select=gt(scene\\,0.15),showinfo",
+                    "-an","-f","null","-"])
+                .output();
+            let start=match analysis {
+                Ok(result) if result.status.success() =>
+                    pick_visual_change(&String::from_utf8_lossy(&result.stderr),fallback,(duration-clip_seconds).max(0.0)),
+                _=>fallback
+            };
             let segment=temp.path().join(format!("clip-{index:04}.mp4"));
             let status=Command::new(&encoder)
                 .args(["-hide_banner","-loglevel","error","-y","-ss",&start.to_string(),"-i"])
@@ -267,6 +294,8 @@ mod tests {
         assert!((sample_start(100.0,10.0,0)-22.5).abs()<0.001);
         assert!((sample_start(100.0,10.0,1)-45.0).abs()<0.001);
         assert_eq!(sample_start(5.0,10.0,2),0.0);
+        assert_eq!(pick_visual_change("pts_time:3.1 rest\\npts_time:7.2 rest",1.0,10.0),7.2);
+        assert_eq!(pick_visual_change("no change",1.0,10.0),1.0);
         let plan=montage_plan(45,2);
         assert_eq!(plan.len(),9);
         assert_eq!(plan[0],(0,5.0));
