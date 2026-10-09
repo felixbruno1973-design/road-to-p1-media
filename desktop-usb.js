@@ -52,7 +52,7 @@
       const terms=prompt.value.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('fr')
         .split(/[^a-z0-9]+/).filter(w=>w.length>2 && !['une','des','les','pour','avec','video','videos','montage','reel','faire','moi','2026'].includes(w));
       if(!terms.length){suggestionStatus.textContent='Indique au moins un lieu, un pilote ou un mot présent dans les noms de fichiers.';return;}
-      const ranked=all.filter(x=>x.category==='Vidéo'||x.category==='Photo').map(file=>{
+      const ranked=all.filter(x=>x.category==='Vidéo').map(file=>{
         const name=file.relativePath.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('fr');
         const score=terms.reduce((total,w)=>total+(name.includes(w)?1:0),0);
         return {file,score};
@@ -171,12 +171,13 @@
         const name=normalized(source+' / '+file.relativePath);
         return {file,score:terms.reduce((n,t)=>n+(name.includes(t)?1:0),0)};
       }).filter(x=>x.score>0).sort((a,b)=>b.score-a.score||a.file.relativePath.localeCompare(b.file.relativePath,'fr'));
-      const candidates=ranked.length?ranked:all.filter(x=>x.category==='Vidéo').slice(0,10).map(file=>({file,score:0}));
+      const videos=all.filter(x=>x.category==='Vidéo');
+      const candidates=ranked.length?ranked:videos.slice(0,10).map(file=>({file,score:0}));
       selected.clear();
       for(const entry of candidates.slice(0,30))selected.set(entry.file.relativePath,entry.file);
       selectionStatus();page=0;render();
       if(!selected.size){
-        window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{count:0,message:'Aucun média trouvé par son nom. Les actions filmées ne sont pas encore analysées.'}}));
+        window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{count:0,message:'Ce dossier ne contient aucune vidéo reconnue (MP4, MOV, AVI, MKV, WEBM ou M4V). Sélectionne un dossier contenant des vidéos. Les photos ne sont pas encore prises en charge par le moteur MP4.'}}));
         return;
       }
       window.dispatchEvent(new CustomEvent('rtp1:usb-media-selected',{detail:{
