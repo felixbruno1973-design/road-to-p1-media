@@ -48,7 +48,7 @@
       if(!info?.count){if(!/Sélectionne ton dossier USB/.test(info?.message||''))waiting=false;return;}
       waiting=false;
       const paths=(info.items||[]).filter(x=>x.category==='Vidéo').slice(0,10).map(x=>x.relativePath);
-      if(!paths.length){result.textContent='Aucune vidéo compatible trouvée pour le montage.';return;}
+      if(!paths.length){result.textContent='Aucune vidéo exploitable dans la sélection. Vérifie que le dossier USB contient des MP4, MOV ou autres vidéos reconnues ; les photos seules ne suffisent pas encore.';return;}
       const requested=/\b(\d{1,3})\s*(?:secondes?|sec|s)\b/i.exec(prompt.value);
       const targetSeconds=requested?Math.min(600,Math.max(5,Number(requested[1]))):45;
       action.disabled=true;
