@@ -294,7 +294,7 @@ mod tests {
         assert!((sample_start(100.0,10.0,0)-22.5).abs()<0.001);
         assert!((sample_start(100.0,10.0,1)-45.0).abs()<0.001);
         assert_eq!(sample_start(5.0,10.0,2),0.0);
-        assert_eq!(pick_visual_change("pts_time:3.1 rest\\npts_time:7.2 rest",1.0,10.0),7.2);
+        assert_eq!(pick_visual_change("pts_time:3.1 rest\\npts_time:7.2 rest",1.0,10.0,1),7.2);
         assert_eq!(pick_visual_change("no change",1.0,10.0,0),1.0);
         let plan=montage_plan(45,2);
         assert_eq!(plan.len(),9);
