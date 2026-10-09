@@ -154,6 +154,13 @@ async fn check_video_engine(app: tauri::AppHandle) -> Result<serde_json::Value, 
     }).await.map_err(|e|e.to_string())?
 }
 
+fn montage_plan(total_seconds: u32, input_count: usize) -> Vec<(usize, f64)> {
+    let count=((total_seconds as f64 / 5.0).ceil() as usize).max(input_count);
+    let count=count.min(120);
+    let duration=total_seconds as f64/count as f64;
+    (0..count).map(|i|(i%input_count,duration)).collect()
+}
+
 fn sample_start(duration: f64, clip_seconds: f64, index: usize) -> f64 {
     let available=(duration-clip_seconds).max(0.0);
     available * match index % 3 {0=>0.25,1=>0.5,_=>0.7}
@@ -190,8 +197,9 @@ async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, Sele
         if parent.starts_with(&root) {return Err("Choisis un dossier de sortie en dehors des vidéos USB.".into());}
         let temp=tempfile::tempdir().map_err(|e|e.to_string())?;
         let mut segments=Vec::new();
-        let seconds_per_clip=request.target_seconds as f64 / request.relative_paths.len() as f64;
-        for (index,path) in request.relative_paths.iter().enumerate() {
+        let plan=montage_plan(request.target_seconds,request.relative_paths.len());
+        for (index,(source_index,seconds_per_clip)) in plan.iter().copied().enumerate() {
+            let path=&request.relative_paths[source_index];
             let rel=Path::new(path);
             if rel.is_absolute() || rel.components().any(|p|!matches!(p,std::path::Component::Normal(_))) ||
                kind(rel)!=Some("Vidéo") {
@@ -259,5 +267,9 @@ mod tests {
         assert!((sample_start(100.0,10.0,0)-22.5).abs()<0.001);
         assert!((sample_start(100.0,10.0,1)-45.0).abs()<0.001);
         assert_eq!(sample_start(5.0,10.0,2),0.0);
+        let plan=montage_plan(45,2);
+        assert_eq!(plan.len(),9);
+        assert_eq!(plan[0],(0,5.0));
+        assert_eq!(plan[1],(1,5.0));
     }
 }
