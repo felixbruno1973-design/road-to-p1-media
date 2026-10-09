@@ -154,7 +154,7 @@ async fn check_video_engine(app: tauri::AppHandle) -> Result<serde_json::Value, 
     }).await.map_err(|e|e.to_string())?
 }
 
-fn pick_visual_change(stderr: &str, fallback: f64, max_start: f64) -> f64 {
+fn pick_visual_change(stderr: &str, fallback: f64, max_start: f64, segment_index: usize) -> f64 {
     let mut times=Vec::new();
     for line in stderr.lines() {
         if let Some(start)=line.find("pts_time:") {
@@ -165,7 +165,7 @@ fn pick_visual_change(stderr: &str, fallback: f64, max_start: f64) -> f64 {
             }
         }
     }
-    if times.is_empty() {fallback} else {times[times.len()/2]}
+    if times.is_empty() {fallback} else {times[segment_index % times.len()]}
 }
 
 fn montage_plan(total_seconds: u32, input_count: usize) -> Vec<(usize, f64)> {
@@ -244,7 +244,7 @@ async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, Sele
                 .output();
             let start=match analysis {
                 Ok(result) if result.status.success() =>
-                    pick_visual_change(&String::from_utf8_lossy(&result.stderr),fallback,(duration-clip_seconds).max(0.0)),
+                    pick_visual_change(&String::from_utf8_lossy(&result.stderr),fallback,(duration-clip_seconds).max(0.0),index),
                 _=>fallback
             };
             let segment=temp.path().join(format!("clip-{index:04}.mp4"));
@@ -295,7 +295,7 @@ mod tests {
         assert!((sample_start(100.0,10.0,1)-45.0).abs()<0.001);
         assert_eq!(sample_start(5.0,10.0,2),0.0);
         assert_eq!(pick_visual_change("pts_time:3.1 rest\\npts_time:7.2 rest",1.0,10.0),7.2);
-        assert_eq!(pick_visual_change("no change",1.0,10.0),1.0);
+        assert_eq!(pick_visual_change("no change",1.0,10.0,0),1.0);
         let plan=montage_plan(45,2);
         assert_eq!(plan.len(),9);
         assert_eq!(plan[0],(0,5.0));
