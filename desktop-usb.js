@@ -151,7 +151,7 @@
         pendingMontageRequest=null;
       } finally {button.disabled=false;}
     });
-    window.addEventListener('rtp1:montage-request',event=>{
+    window.addEventListener('rtp1:montage-request',async event=>{
       const request=event.detail;
       if(!request||typeof request.instruction!=='string')return;
       if(!all.length && source){
@@ -164,15 +164,15 @@
         button.click();
         return;
       }
-      const normalized=s=>s.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('fr');
-      const terms=normalized(request.instruction).split(/[^a-z0-9]+/).filter(w=>w.length>2&&
-        !['fais','moi','une','des','les','avec','video','videos','reel','montage','secondes','seconde','sec','plus','meilleurs','meilleures','moments','pour','format','instagram','tiktok','musique','dynamique'].includes(w)&&!/^[0-9]{1,3}$/.test(w));
-      const ranked=all.filter(x=>x.category==='Vidéo'||x.category==='Photo').map(file=>{
-        const name=normalized(source+' / '+file.relativePath);
-        return {file,score:terms.reduce((n,t)=>n+(name.includes(t)?1:0),0)};
-      }).filter(x=>x.score>0).sort((a,b)=>b.score-a.score||a.file.relativePath.localeCompare(b.file.relativePath,'fr'));
-      const videos=all.filter(x=>x.category==='Vidéo');
-      const candidates=ranked.length?ranked:videos.slice(0,10).map(file=>({file,score:0}));
+      let ranking;
+      try {
+        const module=await import('./brief-ranking.mjs');
+        ranking=module.chooseForBrief(all,request.instruction,10);
+      } catch(error) {
+        window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{count:0,message:'Recherche locale indisponible : '+String(error)}}));
+        return;
+      }
+      const candidates=ranking.items;
       selected.clear();
       for(const entry of candidates.slice(0,30))selected.set(entry.file.relativePath,entry.file);
       selectionStatus();page=0;render();
@@ -184,7 +184,7 @@
         source,items:[...selected.values()].map(x=>({relativePath:x.relativePath,category:x.category,sizeBytes:x.sizeBytes}))
       }}));
       window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{
-        count:selected.size,items:[...selected.values()].map(x=>({relativePath:x.relativePath,category:x.category})),message:ranked.length?selected.size+' média(s) trouvés par leur nom. Préparation automatique du MP4…':selected.size+' vidéo(s) proposées faute de correspondance dans les noms. Ce sont les premières du dossier, pas les meilleures actions.'
+        count:selected.size,items:[...selected.values()].map(x=>({relativePath:x.relativePath,category:x.category})),message:selected.size+' vidéo(s) proposées. '+ranking.warning+' Préparation du MP4…'
       }}));
     });
     panel.append(title,explanation,button,status,suggestControls,suggestionStatus,controls,count,list,more,selectionLabel,studioButton);
