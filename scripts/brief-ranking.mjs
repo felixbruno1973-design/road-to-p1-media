@@ -18,7 +18,7 @@ export function rankForBrief(files,instruction){
 export function chooseForBrief(files,instruction,max=10){
  const ranked=rankForBrief(files,instruction);
  const wantsInteraction=/echange|discussion|brief|mecano|mecanicien|ingenieur|pilot|preparation|paddock/.test(normalize(instruction));
- if(!wantsInteraction)return ranked.slice(0,max);
+ if(!wantsInteraction)return {items:ranked.slice(0,max),warning:''};
  const people=ranked.filter(x=>x.humans);
  if(!people.length)return {items:ranked.slice(0,max),warning:'Aucune vidéo identifiée comme briefing ou échange dans les noms de fichiers. Le logiciel ne reconnaît pas encore ces scènes dans les images.'};
  const supplementary=ranked.filter(x=>!x.humans);
