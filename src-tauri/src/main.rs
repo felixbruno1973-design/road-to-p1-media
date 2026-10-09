@@ -154,6 +154,11 @@ async fn check_video_engine(app: tauri::AppHandle) -> Result<serde_json::Value, 
     }).await.map_err(|e|e.to_string())?
 }
 
+fn sample_start(duration: f64, clip_seconds: f64, index: usize) -> f64 {
+    let available=(duration-clip_seconds).max(0.0);
+    available * match index % 3 {0=>0.25,1=>0.5,_=>0.7}
+}
+
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RenderRequest {
@@ -206,8 +211,7 @@ async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, Sele
             if !duration.is_finite() || duration <= 0.0 {return Err("Durée vidéo invalide.".into());}
             let clip_seconds=seconds_per_clip.min(duration).max(0.1);
             // Temporal sampling only, not recognition of racing actions.
-            let available=(duration-clip_seconds).max(0.0);
-            let start=available * match index % 3 {0=>0.25,1=>0.5,_=>0.7};
+            let start=sample_start(duration,clip_seconds,index);
             let segment=temp.path().join(format!("clip-{index:04}.mp4"));
             let status=Command::new(&encoder)
                 .args(["-hide_banner","-loglevel","error","-y","-ss",&start.to_string(),"-i"])
@@ -252,5 +256,8 @@ mod tests {
         assert_eq!(kind(Path::new("race.MP4")),Some("Vidéo"));
         assert_eq!(kind(Path::new("photo.jpg")),Some("Photo"));
         assert_eq!(kind(Path::new("notes.txt")),None);
+        assert!((sample_start(100.0,10.0,0)-22.5).abs()<0.001);
+        assert!((sample_start(100.0,10.0,1)-45.0).abs()<0.001);
+        assert_eq!(sample_start(5.0,10.0,2),0.0);
     }
 }
