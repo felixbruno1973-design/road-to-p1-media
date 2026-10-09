@@ -177,6 +177,7 @@ async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, Sele
         return Err("La sortie doit être un fichier MP4.".into());
     }
     let encoder=video_tool(&app,"ffmpeg")?;
+    let probe=video_tool(&app,"ffprobe")?;
     tauri::async_runtime::spawn_blocking(move || {
         let root = root.canonicalize().map_err(|e|e.to_string())?;
         let parent=output.parent().ok_or("Dossier de sortie invalide.")?
@@ -195,10 +196,22 @@ async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, Sele
             if !file.starts_with(&root) || !file.is_file() {
                 return Err("Vidéo inaccessible dans le dossier USB.".into());
             }
+            // Inspect duration locally and avoid always starting at the first frame.
+            let probe_output=Command::new(&probe).args(["-v","error","-show_entries","format=duration",
+                "-of","default=noprint_wrappers=1:nokey=1"]).arg(&file).output()
+                .map_err(|e|format!("Impossible de lire la durée : {e}"))?;
+            if !probe_output.status.success() {return Err(format!("Durée illisible pour la vidéo {}",index+1));}
+            let duration=String::from_utf8_lossy(&probe_output.stdout).trim().parse::<f64>()
+                .map_err(|_|format!("Durée invalide pour la vidéo {}",index+1))?;
+            if !duration.is_finite() || duration <= 0.0 {return Err("Durée vidéo invalide.".into());}
+            let clip_seconds=seconds_per_clip.min(duration).max(0.1);
+            // Temporal sampling only, not recognition of racing actions.
+            let available=(duration-clip_seconds).max(0.0);
+            let start=available * match index % 3 {0=>0.25,1=>0.5,_=>0.7};
             let segment=temp.path().join(format!("clip-{index:04}.mp4"));
             let status=Command::new(&encoder)
-                .args(["-hide_banner","-loglevel","error","-y","-i"])
-                .arg(&file).args(["-t",&seconds_per_clip.to_string(),"-vf",
+                .args(["-hide_banner","-loglevel","error","-y","-ss",&start.to_string(),"-i"])
+                .arg(&file).args(["-t",&clip_seconds.to_string(),"-vf",
                     "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30",
                     "-an","-c:v","libx264","-pix_fmt","yuv420p","-preset","veryfast"])
                 .arg(&segment)
