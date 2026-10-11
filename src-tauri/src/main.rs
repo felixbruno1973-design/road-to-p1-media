@@ -311,7 +311,7 @@ async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, Sele
             let scene_times=scene_cache.entry(file.clone()).or_insert_with(|| {
                 let analysis=Command::new(&encoder)
                     .args(["-hide_banner","-nostdin","-loglevel","info","-t",&inspect.to_string(),"-i"])
-                    .arg(&file).args(["-vf","fps=2,select=gt(scene\\,0.15),showinfo",
+                    .arg(&file).args(["-vf","fps=2,select='gt(scene,0.15)',showinfo",
                         "-an","-f","null","-"]).output();
                 match analysis {
                     Ok(result) if result.status.success() =>
