@@ -160,6 +160,46 @@
             }catch(error){details.textContent='Aperçu indisponible : '+String(error);}
             finally {preview.disabled=false;}
           });
+          const ai=document.createElement('button');
+          ai.type='button';ai.className='btn';ai.textContent='Proposer des scènes (IA locale)';
+          ai.addEventListener('click',async event=>{
+            event.preventDefault();
+            if(!images.src.startsWith('data:image/')){
+              details.textContent='Commence par « Voir 12 images » pour préparer l’analyse locale.';
+              return;
+            }
+            ai.disabled=true;
+            let suggestions=0;
+            try{
+              const [{detectObjectsLocally},{classifyVisualDetections}]=await Promise.all([
+                import('./local-object-detector.mjs'),
+                import('./visual-scene-classifier.mjs')
+              ]);
+              const width=Math.floor(images.naturalWidth/3);
+              const height=Math.floor(images.naturalHeight/4);
+              const canvas=document.createElement('canvas');
+              canvas.width=width;canvas.height=height;
+              const ctx=canvas.getContext('2d',{willReadFrequently:true});
+              for(let frame=0;frame<12;frame++){
+                details.textContent='Analyse IA locale : image '+(frame+1)+'/12…';
+                ctx.drawImage(images,(frame%3)*width,Math.floor(frame/3)*height,width,height,0,0,width,height);
+                const detections=await detectObjectsLocally(canvas);
+                const guess=classifyVisualDetections(detections.map(x=>({label:x.class,score:x.score})));
+                const tags=sceneMoments.get(file.relativePath)||new Map();
+                if(guess.label!=='unknown'&&!tags.has(frame)){
+                  tags.set(frame,guess.label);
+                  sceneMoments.set(file.relativePath,tags);
+                  const selector=momentsGrid.querySelectorAll('select')[frame];
+                  if(selector)selector.value=guess.label;
+                  suggestions++;
+                }
+              }
+              details.textContent=suggestions
+                ? suggestions+' scènes proposées. Vérifie les catégories avant de créer le montage dans Studio.'
+                : 'Aucune scène classée automatiquement. Classe les passages manuellement.';
+            }catch(error){details.textContent='Analyse visuelle locale indisponible : '+String(error);}
+            finally{ai.disabled=false;}
+          });
           const tag=document.createElement('select');
           tag.setAttribute('aria-label','Type de scène dans '+file.relativePath);
           for(const [value,label] of [['','Scène non classée'],['briefing','Échanges / briefing'],['mechanics','Mécanique / réglages'],['track','Karting en piste']]){
@@ -171,7 +211,7 @@
             if(tag.value)sceneLabels.set(file.relativePath,tag.value);
             else sceneLabels.delete(file.relativePath);
           });
-          p.append(inspect,preview,tag,details,images,momentsGrid);
+          p.append(inspect,preview,ai,tag,details,images,momentsGrid);
         }
         list.append(p);
       }
