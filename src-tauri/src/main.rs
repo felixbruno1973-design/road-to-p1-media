@@ -247,7 +247,8 @@ async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, Sele
                 }
             });
             if !duration.is_finite() || duration <= 0.0 {return Err(format!("Durée invalide pour la vidéo {}",index+1));}
-            let clip_seconds=seconds_per_clip.min(duration).max(0.1);
+            // Repeat short source footage to fill its allocated montage slot.
+            let clip_seconds=seconds_per_clip.max(0.1);
             // Temporal sampling only, not recognition of racing actions.
             let fallback=sample_start(duration,clip_seconds,index);
             // Lightweight local change-point detection, not human/action recognition.
@@ -269,7 +270,7 @@ async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, Sele
             let start=if eligible.is_empty() {fallback} else {eligible[index%eligible.len()]};
             let segment=temp.path().join(format!("clip-{index:04}.mp4"));
             let status=Command::new(&encoder)
-                .args(["-hide_banner","-loglevel","error","-y","-ss",&start.to_string(),"-i"])
+                .args(["-hide_banner","-loglevel","error","-y","-stream_loop","-1","-ss",&start.to_string(),"-i"])
                 .arg(&file).args(["-t",&clip_seconds.to_string(),"-vf",
                     "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30",
                     "-an","-c:v","libx264","-pix_fmt","yuv420p","-preset","veryfast"])
