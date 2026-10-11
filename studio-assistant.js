@@ -1,5 +1,4 @@
-/* First-step automatic montage assistant: local, metadata-only suggestions.
-   Visual action recognition and MP4 export are not available yet. */
+/* Local desktop MP4 assistant. Visual action recognition is not yet available. */
 (() => {
   'use strict';
   document.addEventListener('DOMContentLoaded', () => {
@@ -12,7 +11,7 @@
     const heading=document.createElement('h3');
     heading.textContent='Assistant vidéo — donne ton objectif';
     const explanation=document.createElement('p');
-    explanation.textContent='Prototype : recherche les vidéos par nom sur le disque USB et tente de générer un MP4 local avec FFmpeg. Ne reconnaît pas encore les actions filmées ; FFmpeg doit être installé.';
+    explanation.textContent='Montage MP4 local : sélectionne les vidéos du disque USB selon leurs noms et crée le clip sans transférer tes fichiers. La reconnaissance visuelle des actions reste à développer.';
     const prompt=document.createElement('textarea');
     prompt.rows=3;prompt.style.cssText='width:100%;min-height:80px';
     prompt.placeholder='Fais-moi un Reel de 45 secondes de Lara à Annéville 2026.';
@@ -47,12 +46,12 @@
       if(!waiting)return;
       if(!info?.count){if(!/Sélectionne ton dossier USB/.test(info?.message||''))waiting=false;return;}
       waiting=false;
-      const paths=(info.items||[]).filter(x=>x.category==='Vidéo').slice(0,10).map(x=>x.relativePath);
+      const paths=(info.items||[]).filter(x=>x.category==='Vidéo').slice(0,30).map(x=>x.relativePath);
       if(!paths.length){result.textContent='Aucune vidéo exploitable dans la sélection. Vérifie que le dossier USB contient des MP4, MOV ou autres vidéos reconnues ; les photos seules ne suffisent pas encore.';return;}
       const requested=/\b(\d{1,3})\s*(?:secondes?|sec|s)\b/i.exec(prompt.value);
       const targetSeconds=requested?Math.min(600,Math.max(5,Number(requested[1]))):45;
       action.disabled=true;
-      result.textContent='Sélection de '+paths.length+' vidéo(s). Choisis où enregistrer le MP4, puis attends le rendu local…';
+      result.textContent='Montage de '+paths.length+' extraits à partir du disque USB. Choisis où enregistrer le MP4, puis attends le rendu local…';
       try{
         const output=await window.__TAURI__.core.invoke('render_auto_montage',{
           request:{relativePaths:paths,targetSeconds}
