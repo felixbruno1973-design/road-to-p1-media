@@ -234,6 +234,8 @@ fn sample_start(duration: f64, clip_seconds: f64, index: usize) -> f64 {
 struct RenderRequest {
     relative_paths: Vec<String>,
     target_seconds: u32,
+    #[serde(default)]
+    start_seconds: Vec<Option<f64>>,
 }
 
 #[tauri::command]
@@ -243,6 +245,12 @@ async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, Sele
     if request.relative_paths.is_empty() || request.relative_paths.len() > 30 ||
        request.target_seconds < 5 || request.target_seconds > 600 {
         return Err("Sélection ou durée invalide (1 à 30 médias, 5 à 600 secondes).".into());
+    }
+    if !request.start_seconds.is_empty() && request.start_seconds.len()!=request.relative_paths.len() {
+        return Err("Les minutages ne correspondent pas à la sélection.".into());
+    }
+    if request.start_seconds.iter().flatten().any(|t|!t.is_finite()||*t<0.0) {
+        return Err("Un minutage de scène est invalide.".into());
     }
     let Some(output) = rfd::FileDialog::new()
         .add_filter("Vidéo MP4", &["mp4"])
@@ -321,9 +329,13 @@ async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, Sele
             });
             let max_start=(duration-clip_seconds).max(0.0);
             let eligible:Vec<f64>=scene_times.iter().copied().filter(|t|*t<=max_start).collect();
-            // Spread repeated excerpts across the entire recording, not always the first cut.
             let previous=used_starts.entry(file.clone()).or_default();
-            let start=choose_nonrepeating_start(&eligible,fallback,max_start,index,clip_seconds,previous);
+            let requested_start=request.start_seconds.get(source_index).and_then(|t|*t);
+            let start=if let Some(time)=requested_start {
+                time.min(max_start)
+            } else {
+                choose_nonrepeating_start(&eligible,fallback,max_start,index,clip_seconds,previous)
+            };
             previous.push(start);
             let segment=temp.path().join(format!("clip-{index:04}.mp4"));
             let status=Command::new(&encoder)
