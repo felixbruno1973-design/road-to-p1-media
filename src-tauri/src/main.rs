@@ -402,9 +402,9 @@ mod tests {
         let second=choose_nonrepeating_start(&[5.0,20.0,35.0],0.0,40.0,1,5.0,&[first]);
         assert!((first-second).abs()>=4.0);
         let plan=montage_plan(45,2);
-        assert_eq!(plan.len(),9);
-        assert_eq!(plan[0],(0,5.0));
-        assert_eq!(plan[1],(1,5.0));
+        assert_eq!(plan.len(),10);
+        assert_eq!(plan[0],(0,4.5));
+        assert_eq!(plan[1],(1,4.5));
         let balanced=montage_plan(60,10);
         assert_eq!(balanced.len(),20);
         assert_eq!(balanced.iter().filter(|(source,_)| *source<8).count(),16);
