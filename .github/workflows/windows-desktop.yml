@@ -55,6 +55,22 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Local MP4 probing failed' }
           $seconds = [double]::Parse(($duration -join '').Trim(), [System.Globalization.CultureInfo]::InvariantCulture)
           if ($seconds -lt 0.5) { throw 'Output MP4 too short' }
+      - name: Test photo clips and scene detection with bundled FFmpeg
+        shell: pwsh
+        run: |
+          $ffmpeg = "src-tauri/resources/ffmpeg.exe"
+          $ffprobe = "src-tauri/resources/ffprobe.exe"
+          $photo = "$env:RUNNER_TEMP/karting-test.png"
+          $clip = "$env:RUNNER_TEMP/photo-clip.mp4"
+          & $ffmpeg -hide_banner -loglevel error -y -f lavfi -i "color=c=red:s=640x480" -frames:v 1 $photo
+          if ($LASTEXITCODE -ne 0) { throw 'Synthetic photo creation failed' }
+          & $ffmpeg -hide_banner -loglevel error -y -loop 1 -framerate 30 -i $photo -t 3 -vf "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30" -an -c:v libx264 -pix_fmt yuv420p -preset veryfast $clip
+          if ($LASTEXITCODE -ne 0) { throw 'Photo-to-video conversion failed' }
+          $duration = & $ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 $clip
+          $seconds = [double]::Parse(($duration -join '').Trim(), [System.Globalization.CultureInfo]::InvariantCulture)
+          if ([math]::Abs($seconds - 3.0) -gt 0.3) { throw "Incorrect photo clip duration: $seconds" }
+          & $ffmpeg -hide_banner -nostdin -loglevel error -t 1 -i $clip -vf 'fps=2,select=gt(scene\\,0.15),showinfo' -an -f null -
+          if ($LASTEXITCODE -ne 0) { throw 'Scene detection filter failed' }
       - name: Compile native tests without running Windows installer
         run: cargo test --manifest-path src-tauri/Cargo.toml
       - name: Install Tauri CLI
