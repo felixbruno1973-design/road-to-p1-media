@@ -37,3 +37,17 @@ export function selectTaggedVideos(files, tags, slots=10) {
   }
   return {items,warning:'Sélection fondée sur les scènes vérifiées dans Library.'};
 }
+
+export function selectTaggedMoments(moments,slots=12) {
+  const humans=moments.filter(x=>x.label==='briefing'||x.label==='mechanics');
+  const track=moments.filter(x=>x.label==='track');
+  if(!humans.length)return {items:[],warning:'Aucun moment d’échange ou de mécanique identifié.'};
+  const items=[];
+  let peopleIndex=0,trackIndex=0;
+  for(let i=0;i<slots;i++){
+    const cutaway=track.length>0&&(i+1)%5===0;
+    const selected=cutaway?track[(trackIndex++)%track.length]:humans[(peopleIndex++)%humans.length];
+    items.push({file:selected.file,startSeconds:selected.startSeconds});
+  }
+  return {items,warning:'Montage préparé à partir des moments vérifiés dans les aperçus de Library.'};
+}
