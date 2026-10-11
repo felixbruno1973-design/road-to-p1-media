@@ -290,6 +290,17 @@ async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, Sele
             .arg(&concat).args(["-c","copy","-movflags","+faststart"]).arg(&tmp_output)
             .status().map_err(|e|e.to_string())?;
         if !status.success(){return Err("Assemblage vidéo impossible.".into());}
+        // Check the actual result before copying anything into the user's destination.
+        let verified=Command::new(&probe)
+            .args(["-v","error","-show_entries","format=duration","-of","default=noprint_wrappers=1:nokey=1"])
+            .arg(&tmp_output).output().map_err(|e|format!("Vérification MP4 impossible : {e}"))?;
+        if !verified.status.success() {return Err("Le fichier MP4 assemblé est illisible.".into());}
+        let actual=String::from_utf8_lossy(&verified.stdout).trim().parse::<f64>()
+            .map_err(|_|"Impossible de vérifier la durée du montage.".to_string())?;
+        if !actual.is_finite() || actual<=0.0 ||
+           (actual-request.target_seconds as f64).abs()>2.0 {
+            return Err(format!("Montage incomplet : {:.1} s au lieu des {} s demandées. Aucun fichier incomplet enregistré.",actual,request.target_seconds));
+        }
         std::fs::copy(&tmp_output,&output).map_err(|e|format!("Enregistrement MP4 impossible : {e}"))?;
         Ok(Some(output.to_string_lossy().to_string()))
     }).await.map_err(|e|format!("Erreur de rendu : {e}"))?
