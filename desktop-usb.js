@@ -9,6 +9,7 @@
     let all = [], source = '', page = 0;
     let pendingMontageRequest=null;
     const selected = new Map();
+    const sceneLabels = new Map(); // session-only tags; never stored or uploaded
     const panel = document.createElement('section');
     panel.className = 'panel';
     panel.style.cssText = 'margin:0 0 14px;padding:18px';
@@ -137,7 +138,18 @@
             }catch(error){details.textContent='Aperçu indisponible : '+String(error);}
             finally {preview.disabled=false;}
           });
-          p.append(inspect,preview,details,images);
+          const tag=document.createElement('select');
+          tag.setAttribute('aria-label','Type de scène dans '+file.relativePath);
+          for(const [value,label] of [['','Scène non classée'],['briefing','Échanges / briefing'],['mechanics','Mécanique / réglages'],['track','Karting en piste']]){
+            const option=document.createElement('option');option.value=value;option.textContent=label;tag.append(option);
+          }
+          tag.value=sceneLabels.get(file.relativePath)||'';
+          tag.addEventListener('change',event=>{
+            event.preventDefault();
+            if(tag.value)sceneLabels.set(file.relativePath,tag.value);
+            else sceneLabels.delete(file.relativePath);
+          });
+          p.append(inspect,preview,tag,details,images);
         }
         list.append(p);
       }
@@ -153,7 +165,7 @@
       try {
         const result=await invoke('choose_and_scan_folder');
         if(!result) {status.textContent='Sélection annulée.';pendingMontageRequest=null;return;}
-        all=result.files; source=result.sourceName; page=0;selected.clear();selectionStatus();
+        all=result.files; source=result.sourceName; page=0;selected.clear();sceneLabels.clear();selectionStatus();
         status.textContent=result.totalCount+' média(s) recensé(s)'+
           (result.warnings.length?' • '+result.warnings.length+' avertissement(s)':'');
         render();
@@ -184,6 +196,20 @@
       try {
         const module=await import('./brief-ranking.mjs');
         ranking=module.chooseForBrief(all,request.instruction,10);
+        // Tags chosen after inspecting the contact sheet take precedence over filenames.
+        const tagged=all.filter(x=>x.category==='Vidéo'&&sceneLabels.has(x.relativePath));
+        const humans=tagged.filter(x=>['briefing','mechanics'].includes(sceneLabels.get(x.relativePath)));
+        const trackClips=tagged.filter(x=>sceneLabels.get(x.relativePath)==='track');
+        if(humans.length){
+          const items=[];
+          for(let i=0;i<10;i++){
+            const source=(i+1)%5===0&&trackClips.length
+              ?trackClips[Math.floor(i/5)%trackClips.length]
+              :humans[i%humans.length];
+            items.push({file:source});
+          }
+          ranking={items,warning:'Sélection prioritaire d’après les scènes vérifiées dans Library (80 % échanges/mécanique, 20 % piste si disponible).'};
+        }
       } catch(error) {
         window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{count:0,message:'Recherche locale indisponible : '+String(error)}}));
         return;
