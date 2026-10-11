@@ -193,7 +193,7 @@ async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, Sele
       .clone().ok_or("Choisis d'abord un dossier USB.")?;
     if request.relative_paths.is_empty() || request.relative_paths.len() > 30 ||
        request.target_seconds < 5 || request.target_seconds > 600 {
-        return Err("Sélection ou durée invalide (1 à 30 vidéos, 5 à 600 secondes).".into());
+        return Err("Sélection ou durée invalide (1 à 30 médias, 5 à 600 secondes).".into());
     }
     let Some(output) = rfd::FileDialog::new()
         .add_filter("Vidéo MP4", &["mp4"])
@@ -216,12 +216,24 @@ async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, Sele
             let path=&request.relative_paths[source_index];
             let rel=Path::new(path);
             if rel.is_absolute() || rel.components().any(|p|!matches!(p,std::path::Component::Normal(_))) ||
-               kind(rel)!=Some("Vidéo") {
+               !matches!(kind(rel),Some("Vidéo"|"Photo")) {
                 return Err("Nom de vidéo non autorisé.".into());
             }
             let file=root.join(rel).canonicalize().map_err(|e|e.to_string())?;
             if !file.starts_with(&root) || !file.is_file() {
                 return Err("Vidéo inaccessible dans le dossier USB.".into());
+            }
+            if kind(rel)==Some("Photo") {
+                let segment=temp.path().join(format!("clip-{index:04}.mp4"));
+                let status=Command::new(&encoder)
+                    .args(["-hide_banner","-loglevel","error","-y","-loop","1","-framerate","30","-i"])
+                    .arg(&file).args(["-t",&seconds_per_clip.to_string(),"-vf",
+                        "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30",
+                        "-an","-c:v","libx264","-pix_fmt","yuv420p","-preset","veryfast"])
+                    .arg(&segment).status().map_err(|e|format!("Photo impossible à lire : {e}"))?;
+                if !status.success() {return Err(format!("Erreur de rendu sur la photo {}",index+1));}
+                segments.push(segment);
+                continue;
             }
             // Inspect duration locally and avoid always starting at the first frame.
             let probe_output=Command::new(&probe).args(["-v","error","-show_entries","format=duration",
