@@ -267,7 +267,8 @@ async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, Sele
             });
             let max_start=(duration-clip_seconds).max(0.0);
             let eligible:Vec<f64>=scene_times.iter().copied().filter(|t|*t<=max_start).collect();
-            let start=if eligible.is_empty() {fallback} else {eligible[index%eligible.len()]};
+            // Never start very close to an abrupt visual cut: leave a short pre-roll.
+            let start=if eligible.is_empty() {fallback} else {(eligible[index%eligible.len()]-0.5).max(0.0)};
             let segment=temp.path().join(format!("clip-{index:04}.mp4"));
             let status=Command::new(&encoder)
                 .args(["-hide_banner","-loglevel","error","-y","-stream_loop","-1","-ss",&start.to_string(),"-i"])
