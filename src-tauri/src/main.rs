@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use serde::Serialize;
+use base64::Engine;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::collections::HashMap;
@@ -44,6 +45,31 @@ fn video_tool(app: &tauri::AppHandle, name: &str) -> Result<PathBuf, String> {
     let binary=dir.join("resources").join(format!("{name}.exe"));
     if binary.is_file() { Ok(binary) }
     else { Err(format!("Moteur vidéo intégré absent : {name}.exe")) }
+}
+
+#[tauri::command]
+async fn preview_video_frames(app: tauri::AppHandle, state: tauri::State<'_, SelectedFolder>, relative_path: String) -> Result<String, String> {
+    let root=state.0.lock().map_err(|_|"Dossier USB indisponible.")?.clone()
+        .ok_or("Sélectionne d'abord un dossier USB.")?;
+    let ffmpeg=video_tool(&app,"ffmpeg")?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let rel=Path::new(&relative_path);
+        if rel.is_absolute() || rel.components().any(|p|!matches!(p,std::path::Component::Normal(_)))
+            || kind(rel)!=Some("Vidéo") {return Err("Vidéo non autorisée.".to_string());}
+        let root=root.canonicalize().map_err(|e|e.to_string())?;
+        let file=root.join(rel).canonicalize().map_err(|e|e.to_string())?;
+        if !file.starts_with(&root)||!file.is_file(){return Err("Vidéo hors du dossier USB.".into());}
+        // Twelve frames across the first minute: a visible local contact sheet, no uploads.
+        let output=Command::new(&ffmpeg)
+            .args(["-hide_banner","-nostdin","-loglevel","error","-t","60","-i"])
+            .arg(&file)
+            .args(["-vf","fps=1/5,scale=160:-1,tile=3x4","-frames:v","1","-f","image2pipe","-vcodec","mjpeg","-"])
+            .output().map_err(|e|e.to_string())?;
+        if !output.status.success() || output.stdout.is_empty() {
+            return Err("Impossible d'extraire les images de cette vidéo.".into());
+        }
+        Ok(format!("data:image/jpeg;base64,{}",base64::engine::general_purpose::STANDARD.encode(&output.stdout)))
+    }).await.map_err(|e|e.to_string())?
 }
 
 #[tauri::command]
@@ -341,7 +367,7 @@ async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, Sele
 fn main() {
     tauri::Builder::default()
         .manage(SelectedFolder::default())
-        .invoke_handler(tauri::generate_handler![choose_and_scan_folder, save_studio_project, probe_selected_video, render_auto_montage, check_video_engine])
+        .invoke_handler(tauri::generate_handler![preview_video_frames, choose_and_scan_folder, save_studio_project, probe_selected_video, render_auto_montage, check_video_engine])
         .run(tauri::generate_context!())
         .expect("Erreur au lancement de Road to P1 Media");
 }
