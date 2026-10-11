@@ -21,7 +21,13 @@ export function chooseForBrief(files,instruction,max=10){
  if(!wantsInteraction)return {items:ranked.slice(0,max),warning:''};
  const people=ranked.filter(x=>x.humans);
  if(!people.length)return {items:ranked.slice(0,max),warning:'Aucune vidéo identifiée comme briefing ou échange dans les noms de fichiers. Le logiciel ne reconnaît pas encore ces scènes dans les images.'};
- const supplementary=ranked.filter(x=>!x.humans);
- const n=Math.min(people.length,Math.max(1,Math.ceil(max*0.75)));
- return {items:[...people.slice(0,n),...supplementary.slice(0,max-n)],warning:'Priorité basée sur les noms de fichiers, pas sur une analyse visuelle.'};
+ const trackClips=ranked.filter(x=>!x.humans);
+ // A 60s briefing reel should spend ~75% of its time on the named human exchanges.
+ // Repeating input references is deliberate: the renderer chooses different excerpts per segment.
+ const humanSlots=trackClips.length?Math.max(1,Math.ceil(max*0.75)):max;
+ const trackSlots=max-humanSlots;
+ const items=[];
+ for(let i=0;i<humanSlots;i++)items.push(people[i%people.length]);
+ for(let i=0;i<trackSlots;i++)items.push(trackClips[i%trackClips.length]);
+ return {items,warning:'Environ 75 % du montage sont réservés aux vidéos nommées briefing ou mécanique. Les actions ne sont pas encore reconnues visuellement.'};
 }
