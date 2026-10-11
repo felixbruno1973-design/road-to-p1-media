@@ -24,3 +24,16 @@ export function selectEditorialTimeline(scenes,totalSeconds=60){
   }
   return {segments,warning:'Classement visuel indicatif : plusieurs personnes ne prouvent pas une discussion.'};
 }
+
+export function selectTaggedVideos(files, tags, slots=10) {
+  const humans=files.filter(f=>f.category==='Vidéo'&&['briefing','mechanics'].includes(tags[f.relativePath]));
+  const track=files.filter(f=>f.category==='Vidéo'&&tags[f.relativePath]==='track');
+  if(!humans.length)return {items:[],warning:'Aucune vidéo d’échanges ou de mécanique classée.'};
+  const items=[];
+  for(let i=0;i<slots;i++){
+    const cutaway=track.length>0&&(i+1)%5===0;
+    const chosen=cutaway?track[Math.floor(i/5)%track.length]:humans[i%humans.length];
+    items.push({file:chosen});
+  }
+  return {items,warning:'Sélection fondée sur les scènes vérifiées dans Library.'};
+}
