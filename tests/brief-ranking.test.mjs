@@ -19,3 +19,10 @@ test('warns when no filename identifies the requested exchanges',()=>{
  const picked=chooseForBrief([{relativePath:'GX01000.MP4',category:'Vidéo'}],'échanges mécaniciens');
  assert.match(picked.warning,/Aucune vidéo identifiée/);
 });
+
+test('maintains at least three quarters briefing references for 60-second edit',()=>{
+ const selected=chooseForBrief(files,'60 secondes échanges pilotes et mécanos avec quelques plans piste',10);
+ assert.equal(selected.items.length,10);
+ assert.equal(selected.items.filter(x=>x.humans).length,8);
+ assert.equal(selected.items.filter(x=>!x.humans).length,2);
+});
