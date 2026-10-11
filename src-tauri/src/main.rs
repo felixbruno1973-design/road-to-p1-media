@@ -3,6 +3,7 @@
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use std::collections::HashMap;
 use std::process::Command;
 use tauri::Manager;
 use std::time::UNIX_EPOCH;
@@ -154,18 +155,13 @@ async fn check_video_engine(app: tauri::AppHandle) -> Result<serde_json::Value, 
     }).await.map_err(|e|e.to_string())?
 }
 
-fn pick_visual_change(stderr: &str, fallback: f64, max_start: f64, segment_index: usize) -> f64 {
-    let mut times=Vec::new();
-    for line in stderr.lines() {
-        if let Some(start)=line.find("pts_time:") {
-            let value=&line[start+9..];
-            let value=value.split_whitespace().next().unwrap_or("");
-            if let Ok(time)=value.parse::<f64>() {
-                if time.is_finite() && time>=0.0 && time<=max_start {times.push(time);}
-            }
-        }
-    }
-    if times.is_empty() {fallback} else {times[segment_index % times.len()]}
+fn parse_visual_changes(stderr: &str) -> Vec<f64> {
+    stderr.lines().filter_map(|line| {
+        let start=line.find("pts_time:")?;
+        let raw=line[start+9..].split_whitespace().next()?;
+        let t=raw.parse::<f64>().ok()?;
+        if t.is_finite() && t>=0.0 {Some(t)} else {None}
+    }).collect()
 }
 
 fn montage_plan(total_seconds: u32, input_count: usize) -> Vec<(usize, f64)> {
@@ -211,6 +207,7 @@ async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, Sele
         if parent.starts_with(&root) {return Err("Choisis un dossier de sortie en dehors des vidéos USB.".into());}
         let temp=tempfile::tempdir().map_err(|e|e.to_string())?;
         let mut segments=Vec::new();
+        let mut scene_cache: HashMap<PathBuf, Vec<f64>>=HashMap::new();
         let plan=montage_plan(request.target_seconds,request.relative_paths.len());
         for (index,(source_index,seconds_per_clip)) in plan.iter().copied().enumerate() {
             let path=&request.relative_paths[source_index];
@@ -249,16 +246,20 @@ async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, Sele
             // Lightweight local change-point detection, not human/action recognition.
             // Sampling is capped at 90 seconds to avoid scanning whole recordings.
             let inspect=duration.min(90.0);
-            let analysis=Command::new(&encoder)
-                .args(["-hide_banner","-nostdin","-loglevel","info","-t",&inspect.to_string(),"-i"])
-                .arg(&file).args(["-vf","fps=2,select=gt(scene\\,0.15),showinfo",
-                    "-an","-f","null","-"])
-                .output();
-            let start=match analysis {
-                Ok(result) if result.status.success() =>
-                    pick_visual_change(&String::from_utf8_lossy(&result.stderr),fallback,(duration-clip_seconds).max(0.0),index),
-                _=>fallback
-            };
+            let scene_times=scene_cache.entry(file.clone()).or_insert_with(|| {
+                let analysis=Command::new(&encoder)
+                    .args(["-hide_banner","-nostdin","-loglevel","info","-t",&inspect.to_string(),"-i"])
+                    .arg(&file).args(["-vf","fps=2,select=gt(scene\\,0.15),showinfo",
+                        "-an","-f","null","-"]).output();
+                match analysis {
+                    Ok(result) if result.status.success() =>
+                        parse_visual_changes(&String::from_utf8_lossy(&result.stderr)),
+                    _=>Vec::new()
+                }
+            });
+            let max_start=(duration-clip_seconds).max(0.0);
+            let eligible:Vec<f64>=scene_times.iter().copied().filter(|t|*t<=max_start).collect();
+            let start=if eligible.is_empty() {fallback} else {eligible[index%eligible.len()]};
             let segment=temp.path().join(format!("clip-{index:04}.mp4"));
             let status=Command::new(&encoder)
                 .args(["-hide_banner","-loglevel","error","-y","-ss",&start.to_string(),"-i"])
@@ -306,8 +307,8 @@ mod tests {
         assert!((sample_start(100.0,10.0,0)-22.5).abs()<0.001);
         assert!((sample_start(100.0,10.0,1)-45.0).abs()<0.001);
         assert_eq!(sample_start(5.0,10.0,2),0.0);
-        assert_eq!(pick_visual_change("pts_time:3.1 rest\npts_time:7.2 rest",1.0,10.0,1),7.2);
-        assert_eq!(pick_visual_change("no change",1.0,10.0,0),1.0);
+        assert_eq!(parse_visual_changes("pts_time:3.1 rest\npts_time:7.2 rest"),vec![3.1,7.2]);
+        assert!(parse_visual_changes("no change").is_empty());
         let plan=montage_plan(45,2);
         assert_eq!(plan.len(),9);
         assert_eq!(plan[0],(0,5.0));
