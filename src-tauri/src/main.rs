@@ -164,6 +164,12 @@ fn parse_visual_changes(stderr: &str) -> Vec<f64> {
     }).collect()
 }
 
+fn choose_scene_start(changes: &[f64], fallback: f64, max_start: f64, index: usize) -> f64 {
+    if changes.is_empty() {return fallback.clamp(0.0,max_start);}
+    let candidate=changes[index % changes.len()];
+    (candidate-0.5).clamp(0.0,max_start)
+}
+
 fn montage_plan(total_seconds: u32, input_count: usize) -> Vec<(usize, f64)> {
     let count=((total_seconds as f64 / 5.0).ceil() as usize).max(input_count);
     let count=count.min(120);
@@ -267,8 +273,8 @@ async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, Sele
             });
             let max_start=(duration-clip_seconds).max(0.0);
             let eligible:Vec<f64>=scene_times.iter().copied().filter(|t|*t<=max_start).collect();
-            // Never start very close to an abrupt visual cut: leave a short pre-roll.
-            let start=if eligible.is_empty() {fallback} else {(eligible[index%eligible.len()]-0.5).max(0.0)};
+            // Spread repeated excerpts across the entire recording, not always the first cut.
+            let start=choose_scene_start(&eligible,fallback,max_start,index);
             let segment=temp.path().join(format!("clip-{index:04}.mp4"));
             let status=Command::new(&encoder)
                 .args(["-hide_banner","-loglevel","error","-y","-stream_loop","-1","-ss",&start.to_string(),"-i"])
@@ -329,6 +335,9 @@ mod tests {
         assert_eq!(sample_start(5.0,10.0,2),0.0);
         assert_eq!(parse_visual_changes("pts_time:3.1 rest\npts_time:7.2 rest"),vec![3.1,7.2]);
         assert!(parse_visual_changes("no change").is_empty());
+        assert_eq!(choose_scene_start(&[3.0,15.0],0.0,30.0,0),2.5);
+        assert_eq!(choose_scene_start(&[3.0,15.0],0.0,30.0,1),14.5);
+        assert_eq!(choose_scene_start(&[],5.0,10.0,1),5.0);
         let plan=montage_plan(45,2);
         assert_eq!(plan.len(),9);
         assert_eq!(plan[0],(0,5.0));
