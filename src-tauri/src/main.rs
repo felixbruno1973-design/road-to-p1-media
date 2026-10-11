@@ -189,8 +189,11 @@ fn choose_nonrepeating_start(changes: &[f64], fallback: f64, max_start: f64, ind
 }
 
 fn montage_plan(total_seconds: u32, input_count: usize) -> Vec<(usize, f64)> {
-    let count=((total_seconds as f64 / 5.0).ceil() as usize).max(input_count);
-    let count=count.min(120);
+    // Use complete cycles of the editorial input order. Partial cycles can
+    // otherwise skew the requested briefing/track ratio towards first items.
+    let desired=((total_seconds as f64 / 5.0).ceil() as usize).max(input_count);
+    let cycles=desired.div_ceil(input_count);
+    let count=(cycles*input_count).min(120);
     let duration=total_seconds as f64/count as f64;
     (0..count).map(|i|(i%input_count,duration)).collect()
 }
@@ -366,5 +369,9 @@ mod tests {
         assert_eq!(plan.len(),9);
         assert_eq!(plan[0],(0,5.0));
         assert_eq!(plan[1],(1,5.0));
+        let balanced=montage_plan(60,10);
+        assert_eq!(balanced.len(),20);
+        assert_eq!(balanced.iter().filter(|(source,_)| *source<8).count(),16);
+        assert_eq!(balanced.iter().filter(|(source,_)| *source>=8).count(),4);
     }
 }
