@@ -9,6 +9,7 @@ on:
       - 'scripts/render-local-mp4.mjs'
       - 'tests/**'
       - 'scripts/prepare-desktop.mjs'
+      - 'scripts/local-object-detector-entry.mjs'
       - 'scripts/generate-windows-icon.mjs'
       - 'package.json'
       - '.github/workflows/windows-desktop.yml'
@@ -23,6 +24,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Install local AI build dependencies
+        run: npm install --no-audit --no-fund
+      - name: Prepare offline image recognition model
+        shell: pwsh
+        run: |
+          $base='https://storage.googleapis.com/tfjs-models/savedmodel/ssdlite_mobilenet_v2'
+          $dir='model-assets/ssdlite_mobilenet_v2'
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          foreach ($name in @('model.json','group1-shard1of5','group1-shard2of5','group1-shard3of5','group1-shard4of5','group1-shard5of5')) {
+            Invoke-WebRequest -Uri "$base/$name" -OutFile "$dir/$name"
+            if ((Get-Item "$dir/$name").Length -lt 100000) { throw "Incomplete object-detection asset: $name" }
+          }
       - name: Prepare desktop frontend
         run: npm run desktop:prepare
       - name: Check JavaScript
