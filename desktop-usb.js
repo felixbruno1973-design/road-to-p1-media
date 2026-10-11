@@ -176,7 +176,7 @@
       selected.clear();
       for(const entry of candidates.slice(0,30))selected.set(entry.file.relativePath,entry.file);
       selectionStatus();page=0;render();
-      if(!selected.size){
+      if(!candidates.length){
         window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{count:0,message:'Ce dossier ne contient aucune vidéo reconnue (MP4, MOV, AVI, MKV, WEBM ou M4V). Sélectionne un dossier contenant des vidéos. Les photos ne sont pas encore prises en charge par le moteur MP4.'}}));
         return;
       }
@@ -184,7 +184,7 @@
         source,items:[...selected.values()].map(x=>({relativePath:x.relativePath,category:x.category,sizeBytes:x.sizeBytes}))
       }}));
       window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{
-        count:selected.size,items:[...selected.values()].map(x=>({relativePath:x.relativePath,category:x.category})),message:selected.size+' vidéo(s) proposées. '+ranking.warning+' Préparation du MP4…'
+        count:candidates.length,items:candidates.map(x=>({relativePath:x.file.relativePath,category:x.file.category})),message:candidates.length+' extraits prévus à partir de '+selected.size+' vidéo(s). '+ranking.warning+' Préparation du MP4…'
       }}));
     });
     panel.append(title,explanation,button,status,suggestControls,suggestionStatus,controls,count,list,more,selectionLabel,studioButton);
