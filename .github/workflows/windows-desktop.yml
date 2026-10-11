@@ -69,7 +69,7 @@ jobs:
           $duration = & $ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 $clip
           $seconds = [double]::Parse(($duration -join '').Trim(), [System.Globalization.CultureInfo]::InvariantCulture)
           if ([math]::Abs($seconds - 3.0) -gt 0.3) { throw "Incorrect photo clip duration: $seconds" }
-          & $ffmpeg -hide_banner -nostdin -loglevel error -t 1 -i $clip -vf 'fps=2,select='gt(scene,0.15)',showinfo' -an -f null -
+          & $ffmpeg -hide_banner -nostdin -loglevel error -t 1 -i $clip -vf "fps=2,select='gt(scene,0.15)',showinfo" -an -f null -
           if ($LASTEXITCODE -ne 0) { throw 'Scene detection filter failed' }
       - name: Compile native tests without running Windows installer
         run: cargo test --manifest-path src-tauri/Cargo.toml
