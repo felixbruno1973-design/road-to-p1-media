@@ -311,29 +311,27 @@ async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, Sele
             if !duration.is_finite() || duration <= 0.0 {return Err(format!("Durée invalide pour la vidéo {}",index+1));}
             // Repeat short source footage to fill its allocated montage slot.
             let clip_seconds=seconds_per_clip.max(0.1);
-            // Temporal sampling only, not recognition of racing actions.
-            let fallback=sample_start(duration,clip_seconds,index);
-            // Lightweight local change-point detection, not human/action recognition.
-            // Sampling is capped at 90 seconds to avoid scanning whole recordings.
-            let inspect=duration.min(90.0);
-            let scene_times=scene_cache.entry(file.clone()).or_insert_with(|| {
-                let analysis=Command::new(&encoder)
-                    .args(["-hide_banner","-nostdin","-loglevel","info","-t",&inspect.to_string(),"-i"])
-                    .arg(&file).args(["-vf","fps=2,select='gt(scene,0.15)',showinfo",
-                        "-an","-f","null","-"]).output();
-                match analysis {
-                    Ok(result) if result.status.success() =>
-                        parse_visual_changes(&String::from_utf8_lossy(&result.stderr)),
-                    _=>Vec::new()
-                }
-            });
             let max_start=(duration-clip_seconds).max(0.0);
-            let eligible:Vec<f64>=scene_times.iter().copied().filter(|t|*t<=max_start).collect();
             let previous=used_starts.entry(file.clone()).or_default();
             let requested_start=request.start_seconds.get(source_index).and_then(|t|*t);
             let start=if let Some(time)=requested_start {
+                // Exact timing reviewed in Library: do not waste time with scene detection.
                 time.min(max_start)
             } else {
+                let fallback=sample_start(duration,clip_seconds,index);
+                let inspect=duration.min(90.0);
+                let scene_times=scene_cache.entry(file.clone()).or_insert_with(|| {
+                    let analysis=Command::new(&encoder)
+                        .args(["-hide_banner","-nostdin","-loglevel","info","-t",&inspect.to_string(),"-i"])
+                        .arg(&file).args(["-vf","fps=2,select='gt(scene,0.15)',showinfo",
+                            "-an","-f","null","-"]).output();
+                    match analysis {
+                        Ok(result) if result.status.success() =>
+                            parse_visual_changes(&String::from_utf8_lossy(&result.stderr)),
+                        _=>Vec::new()
+                    }
+                });
+                let eligible:Vec<f64>=scene_times.iter().copied().filter(|t|*t<=max_start).collect();
                 choose_nonrepeating_start(&eligible,fallback,max_start,index,clip_seconds,previous)
             };
             previous.push(start);
