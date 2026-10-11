@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {classifyVisualDetections, selectEditorialTimeline, selectTaggedVideos} from '../scripts/visual-scene-classifier.mjs';
+import {classifyVisualDetections, selectEditorialTimeline, selectTaggedVideos, selectTaggedMoments} from '../scripts/visual-scene-classifier.mjs';
 test('multiple visible people suggest an interaction but cannot prove conversation',()=>{
  const result=classifyVisualDetections([{label:'person',score:.9},{label:'person',score:.8}]);
  assert.equal(result.label,'briefing');
@@ -27,4 +27,17 @@ test('uses reviewed generic filenames and inserts circuit shots during a briefin
  assert.equal(plan.items.length,10);
  assert.equal(plan.items.filter(x=>x.file.relativePath==='GX03.MP4').length,2);
  assert.equal(plan.items[0].file.relativePath,'GX01.MP4');
+});
+
+test('respects reviewed five-second scenes from generic camera names',()=>{
+ const moments=[
+  {file:{relativePath:'GOPR001.MP4',category:'Vidéo'},label:'briefing',startSeconds:15},
+  {file:{relativePath:'GOPR001.MP4',category:'Vidéo'},label:'mechanics',startSeconds:35},
+  {file:{relativePath:'GOPR002.MP4',category:'Vidéo'},label:'track',startSeconds:10}
+ ];
+ const result=selectTaggedMoments(moments,12);
+ assert.equal(result.items.length,12);
+ assert.equal(result.items.filter(x=>x.file.relativePath==='GOPR002.MP4').length,2);
+ assert.equal(result.items[0].startSeconds,15);
+ assert.equal(result.items[1].startSeconds,35);
 });
