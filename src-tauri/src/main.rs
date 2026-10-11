@@ -170,6 +170,24 @@ fn choose_scene_start(changes: &[f64], fallback: f64, max_start: f64, index: usi
     (candidate-0.5).clamp(0.0,max_start)
 }
 
+fn choose_nonrepeating_start(changes: &[f64], fallback: f64, max_start: f64, index: usize, clip_seconds: f64, used: &[f64]) -> f64 {
+    let mut candidates: Vec<f64>=changes.iter().map(|t|(t-0.5).clamp(0.0,max_start)).collect();
+    if candidates.is_empty() {
+        let slots=((max_start/clip_seconds.max(0.2)).floor() as usize).saturating_add(1).clamp(1,100);
+        candidates=(0..slots).map(|i|(i as f64 * clip_seconds).min(max_start)).collect();
+    }
+    let separation=clip_seconds*0.8;
+    candidates.sort_by(|a,b|{
+        let da=used.iter().map(|u|(a-u).abs()).fold(f64::INFINITY,f64::min);
+        let db=used.iter().map(|u|(b-u).abs()).fold(f64::INFINITY,f64::min);
+        let pa=if da>=separation {1} else {0};
+        let pb=if db>=separation {1} else {0};
+        pb.cmp(&pa).then_with(||db.total_cmp(&da))
+    });
+    if used.is_empty(){choose_scene_start(changes,fallback,max_start,index)}
+    else {candidates[0]}
+}
+
 fn montage_plan(total_seconds: u32, input_count: usize) -> Vec<(usize, f64)> {
     let count=((total_seconds as f64 / 5.0).ceil() as usize).max(input_count);
     let count=count.min(120);
@@ -215,6 +233,7 @@ async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, Sele
         let mut segments=Vec::new();
         let mut scene_cache: HashMap<PathBuf, Vec<f64>>=HashMap::new();
         let mut duration_cache: HashMap<PathBuf, f64>=HashMap::new();
+        let mut used_starts: HashMap<PathBuf, Vec<f64>>=HashMap::new();
         let plan=montage_plan(request.target_seconds,request.relative_paths.len());
         for (index,(source_index,seconds_per_clip)) in plan.iter().copied().enumerate() {
             let path=&request.relative_paths[source_index];
@@ -274,7 +293,9 @@ async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, Sele
             let max_start=(duration-clip_seconds).max(0.0);
             let eligible:Vec<f64>=scene_times.iter().copied().filter(|t|*t<=max_start).collect();
             // Spread repeated excerpts across the entire recording, not always the first cut.
-            let start=choose_scene_start(&eligible,fallback,max_start,index);
+            let previous=used_starts.entry(file.clone()).or_default();
+            let start=choose_nonrepeating_start(&eligible,fallback,max_start,index,clip_seconds,previous);
+            previous.push(start);
             let segment=temp.path().join(format!("clip-{index:04}.mp4"));
             let status=Command::new(&encoder)
                 .args(["-hide_banner","-loglevel","error","-y","-stream_loop","-1","-ss",&start.to_string(),"-i"])
@@ -338,6 +359,9 @@ mod tests {
         assert_eq!(choose_scene_start(&[3.0,15.0],0.0,30.0,0),2.5);
         assert_eq!(choose_scene_start(&[3.0,15.0],0.0,30.0,1),14.5);
         assert_eq!(choose_scene_start(&[],5.0,10.0,1),5.0);
+        let first=choose_nonrepeating_start(&[5.0,20.0,35.0],0.0,40.0,0,5.0,&[]);
+        let second=choose_nonrepeating_start(&[5.0,20.0,35.0],0.0,40.0,1,5.0,&[first]);
+        assert!((first-second).abs()>=4.0);
         let plan=montage_plan(45,2);
         assert_eq!(plan.len(),9);
         assert_eq!(plan[0],(0,5.0));
