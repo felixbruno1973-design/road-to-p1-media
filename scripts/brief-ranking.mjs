@@ -27,7 +27,13 @@ export function chooseForBrief(files,instruction,max=10){
  const humanSlots=trackClips.length?Math.max(1,Math.ceil(max*0.75)):max;
  const trackSlots=max-humanSlots;
  const items=[];
- for(let i=0;i<humanSlots;i++)items.push(people[i%people.length]);
- for(let i=0;i<trackSlots;i++)items.push(trackClips[i%trackClips.length]);
+ let humanIndex=0,trackIndex=0;
+ for(let slot=0;slot<max;slot++){
+   // Spread circuit inserts through the narrative, never group all track shots at the end.
+   const trackExpected=Math.floor((slot+1)*trackSlots/max);
+   const insertTrack=trackExpected>trackIndex && trackIndex<trackSlots;
+   if(insertTrack)items.push(trackClips[(trackIndex++)%trackClips.length]);
+   else items.push(people[(humanIndex++)%people.length]);
+ }
  return {items,warning:'Environ 75 % du montage sont réservés aux vidéos nommées briefing ou mécanique. Les actions ne sont pas encore reconnues visuellement.'};
 }
