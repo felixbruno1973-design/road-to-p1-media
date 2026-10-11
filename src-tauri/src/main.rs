@@ -63,7 +63,7 @@ async fn preview_video_frames(app: tauri::AppHandle, state: tauri::State<'_, Sel
         let output=Command::new(&ffmpeg)
             .args(["-hide_banner","-nostdin","-loglevel","error","-t","60","-i"])
             .arg(&file)
-            .args(["-vf","fps=1/5,scale=160:-1,tile=3x4","-frames:v","1","-f","image2pipe","-vcodec","mjpeg","-"])
+            .args(["-vf","fps=1/5,scale=320:-1,tile=3x4","-frames:v","1","-f","image2pipe","-vcodec","mjpeg","-"])
             .output().map_err(|e|e.to_string())?;
         if !output.status.success() || output.stdout.is_empty() {
             return Err("Impossible d'extraire les images de cette vidéo.".into());
