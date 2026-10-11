@@ -121,7 +121,23 @@
             }catch(error){details.textContent='Analyse indisponible : '+String(error)}
             finally {inspect.disabled=false;}
           });
-          p.append(inspect,details);
+          const preview=document.createElement('button');
+          preview.type='button';preview.className='btn';preview.textContent='Voir 12 images';
+          const images=document.createElement('img');
+          images.alt='Aperçu local des passages de la vidéo toutes les cinq secondes';
+          images.style.cssText='display:none;max-width:100%;width:480px;margin:8px 0';
+          preview.addEventListener('click',async event=>{
+            event.preventDefault();
+            preview.disabled=true;
+            details.textContent='Extraction des images en cours…';
+            try {
+              images.src=await invoke('preview_video_frames',{relativePath:file.relativePath});
+              images.style.display='block';
+              details.textContent='Aperçu local extrait de la vidéo ; aucune reconnaissance automatique des personnes.';
+            }catch(error){details.textContent='Aperçu indisponible : '+String(error);}
+            finally {preview.disabled=false;}
+          });
+          p.append(inspect,preview,details,images);
         }
         list.append(p);
       }
