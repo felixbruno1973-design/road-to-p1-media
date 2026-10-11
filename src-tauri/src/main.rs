@@ -208,6 +208,7 @@ async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, Sele
         let temp=tempfile::tempdir().map_err(|e|e.to_string())?;
         let mut segments=Vec::new();
         let mut scene_cache: HashMap<PathBuf, Vec<f64>>=HashMap::new();
+        let mut duration_cache: HashMap<PathBuf, f64>=HashMap::new();
         let plan=montage_plan(request.target_seconds,request.relative_paths.len());
         for (index,(source_index,seconds_per_clip)) in plan.iter().copied().enumerate() {
             let path=&request.relative_paths[source_index];
@@ -221,6 +222,9 @@ async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, Sele
                 return Err("Vidéo inaccessible dans le dossier USB.".into());
             }
             if kind(rel)==Some("Photo") {
+                if !matches!(rel.extension().and_then(|s|s.to_str()).map(|s|s.to_ascii_lowercase()).as_deref(),Some("jpg"|"jpeg"|"png"|"webp")) {
+                    return Err("Format photo non pris en charge pour le MP4 : utilise JPG, PNG ou WebP.".into());
+                }
                 let segment=temp.path().join(format!("clip-{index:04}.mp4"));
                 let status=Command::new(&encoder)
                     .args(["-hide_banner","-loglevel","error","-y","-loop","1","-framerate","30","-i"])
@@ -233,13 +237,16 @@ async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, Sele
                 continue;
             }
             // Inspect duration locally and avoid always starting at the first frame.
-            let probe_output=Command::new(&probe).args(["-v","error","-show_entries","format=duration",
-                "-of","default=noprint_wrappers=1:nokey=1"]).arg(&file).output()
-                .map_err(|e|format!("Impossible de lire la durée : {e}"))?;
-            if !probe_output.status.success() {return Err(format!("Durée illisible pour la vidéo {}",index+1));}
-            let duration=String::from_utf8_lossy(&probe_output.stdout).trim().parse::<f64>()
-                .map_err(|_|format!("Durée invalide pour la vidéo {}",index+1))?;
-            if !duration.is_finite() || duration <= 0.0 {return Err("Durée vidéo invalide.".into());}
+            let duration=*duration_cache.entry(file.clone()).or_insert_with(|| {
+                let result=Command::new(&probe).args(["-v","error","-show_entries","format=duration",
+                    "-of","default=noprint_wrappers=1:nokey=1"]).arg(&file).output();
+                match result {
+                    Ok(output) if output.status.success() =>
+                        String::from_utf8_lossy(&output.stdout).trim().parse::<f64>().unwrap_or(0.0),
+                    _=>0.0
+                }
+            });
+            if !duration.is_finite() || duration <= 0.0 {return Err(format!("Durée invalide pour la vidéo {}",index+1));}
             let clip_seconds=seconds_per_clip.min(duration).max(0.1);
             // Temporal sampling only, not recognition of racing actions.
             let fallback=sample_start(duration,clip_seconds,index);
