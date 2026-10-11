@@ -197,19 +197,9 @@
         const module=await import('./brief-ranking.mjs');
         ranking=module.chooseForBrief(all,request.instruction,10);
         // Tags chosen after inspecting the contact sheet take precedence over filenames.
-        const tagged=all.filter(x=>x.category==='Vidéo'&&sceneLabels.has(x.relativePath));
-        const humans=tagged.filter(x=>['briefing','mechanics'].includes(sceneLabels.get(x.relativePath)));
-        const trackClips=tagged.filter(x=>sceneLabels.get(x.relativePath)==='track');
-        if(humans.length){
-          const items=[];
-          for(let i=0;i<10;i++){
-            const source=(i+1)%5===0&&trackClips.length
-              ?trackClips[Math.floor(i/5)%trackClips.length]
-              :humans[i%humans.length];
-            items.push({file:source});
-          }
-          ranking={items,warning:'Sélection prioritaire d’après les scènes vérifiées dans Library (80 % échanges/mécanique, 20 % piste si disponible).'};
-        }
+        const planner=await import('./visual-scene-classifier.mjs');
+        const tagged=planner.selectTaggedVideos(all,Object.fromEntries(sceneLabels),10);
+        if(tagged.items.length)ranking=tagged;
       } catch(error) {
         window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{count:0,message:'Recherche locale indisponible : '+String(error)}}));
         return;
