@@ -46,7 +46,9 @@
       if(!waiting)return;
       if(!info?.count){if(!/Sélectionne ton dossier USB/.test(info?.message||''))waiting=false;return;}
       waiting=false;
-      const paths=(info.items||[]).filter(x=>x.category==='Vidéo'||x.category==='Photo').slice(0,30).map(x=>x.relativePath);
+      const items=(info.items||[]).filter(x=>x.category==='Vidéo'||x.category==='Photo').slice(0,30);
+      const paths=items.map(x=>x.relativePath);
+      const startSeconds=items.map(x=>typeof x.startSeconds==='number'?x.startSeconds:null);
       if(!paths.length){result.textContent='Aucun média compatible dans la sélection. Choisis un dossier contenant des vidéos ou des photos JPG/PNG.';return;}
       const requested=/\b(\d{1,3})\s*(?:secondes?|sec|s)\b/i.exec(prompt.value);
       const targetSeconds=requested?Math.min(600,Math.max(5,Number(requested[1]))):45;
@@ -54,7 +56,7 @@
       result.textContent='Montage de '+paths.length+' extraits à partir du disque USB. Choisis où enregistrer le MP4, puis attends le rendu local…';
       try{
         const output=await window.__TAURI__.core.invoke('render_auto_montage',{
-          request:{relativePaths:paths,targetSeconds}
+          request:{relativePaths:paths,startSeconds,targetSeconds}
         });
         result.textContent=output?'Montage enregistré : '+output:'Enregistrement annulé.';
       }catch(error){
