@@ -175,7 +175,9 @@
       const candidates=[...ranking.items];
       // Explicit photo requests add up to two stills without taking over the narrative.
       if(/\bphotos?\b|\bimages?\s+fixes?\b/i.test(request.instruction)){
-        const photos=all.filter(x=>x.category==='Photo' && /\.(jpe?g|png|webp)$/i.test(x.relativePath)).slice(0,2);
+        const photos=all.filter(x=>x.category==='Photo' && /\.(jpe?g|png|webp)$/i.test(x.relativePath))
+          .sort((a,b)=>Number(/piste|circuit|course|kart|race|roulage/i.test(b.relativePath))-Number(/piste|circuit|course|kart|race|roulage/i.test(a.relativePath)))
+          .slice(0,2);
         for(const photo of photos){
           const position=Math.max(1,Math.floor(candidates.length*(photos.indexOf(photo)+1)/(photos.length+1)));
           candidates.splice(position,0,{file:photo});
