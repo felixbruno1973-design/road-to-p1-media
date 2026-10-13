@@ -60,7 +60,7 @@ async fn preview_video_frames(app: tauri::AppHandle, state: tauri::State<'_, Sel
         let file=root.join(rel).canonicalize().map_err(|e|e.to_string())?;
         if !file.starts_with(&root)||!file.is_file(){return Err("Vidéo hors du dossier USB.".into());}
         // Twelve frames across the first minute: a visible local contact sheet, no uploads.
-        let output=Command::new(&ffmpeg)
+        let output=video_command(&ffmpeg)
             .args(["-hide_banner","-nostdin","-loglevel","error","-t","60","-i"])
             .arg(&file)
             .args(["-vf","fps=1/5,scale=320:-1,tile=3x4","-frames:v","1","-f","image2pipe","-vcodec","mjpeg","-"])
@@ -85,7 +85,7 @@ async fn probe_selected_video(app: tauri::AppHandle, state: tauri::State<'_, Sel
         if kind(rel) != Some("Vidéo") { return Err("Ce fichier n'est pas une vidéo reconnue.".into()); }
         let file = root.join(rel).canonicalize().map_err(|e| e.to_string())?;
         if !file.starts_with(&root) || !file.is_file() { return Err("Fichier hors du dossier autorisé.".into()); }
-        let output = Command::new(&probe).args(["-v","error","-show_entries",
+        let output = video_command(&probe).args(["-v","error","-show_entries",
           "format=duration:stream=codec_type,codec_name,width,height,avg_frame_rate",
           "-of","json"]).arg(&file).output().map_err(|e|
           format!("FFprobe indisponible sur ce PC : {e}"))?;
@@ -152,8 +152,10 @@ fn scan(root: &Path) -> Result<ScanResult, String> {
 
 
 #[tauri::command]
-async fn save_studio_project(content: String) -> Result<Option<String>, String> {
-    if content.len() > 1_000_000 || !content.contains("\"road-to-p1-usb-draft\"") {
+async fn save_studio_project(state: tauri::State<'_, SelectedFolder>, content: String) -> Result<Option<String>, String> {
+    let root=state.0.lock().map_err(|_|"Dossier indisponible.")?.clone();
+    let project:serde_json::Value=serde_json::from_str(&content).map_err(|_|"Projet JSON invalide.")?;
+    if content.len() > 1_000_000 || project["kind"]!="road-to-p1-usb-draft" {
         return Err("Projet invalide ou trop volumineux.".into());
     }
     tauri::async_runtime::spawn_blocking(move || {
@@ -164,7 +166,14 @@ async fn save_studio_project(content: String) -> Result<Option<String>, String> 
         if target.extension().and_then(|x| x.to_str()).map(|x| x.eq_ignore_ascii_case("json")) != Some(true) {
             return Err("Le fichier doit porter l'extension .json.".into());
         }
-        std::fs::write(&target, content).map_err(|e| format!("Enregistrement impossible : {e}"))?;
+        let parent=target.parent().ok_or("Destination invalide.")?.canonicalize().map_err(|e|e.to_string())?;
+        if let Some(root)=root {
+            if parent.starts_with(root) {return Err("Enregistre le projet en dehors du dossier source.".into());}
+        }
+        use std::io::Write;
+        let mut file=std::fs::OpenOptions::new().write(true).create_new(true).open(&target)
+            .map_err(|e|format!("Choisis un nouveau nom de projet : {e}"))?;
+        file.write_all(content.as_bytes()).map_err(|e|format!("Enregistrement impossible : {e}"))?;
         Ok(Some(target.to_string_lossy().to_string()))
     }).await.map_err(|e| format!("Erreur système : {e}"))?
 }
@@ -215,13 +224,15 @@ fn choose_nonrepeating_start(changes: &[f64], fallback: f64, max_start: f64, ind
 }
 
 fn montage_plan(total_seconds: u32, input_count: usize) -> Vec<(usize, f64)> {
+    if input_count == 0 { return Vec::new(); }
     // Use complete cycles of the editorial input order. Partial cycles can
     // otherwise skew the requested briefing/track ratio towards first items.
     let desired=((total_seconds as f64 / 5.0).ceil() as usize).max(input_count);
     let cycles=desired.div_ceil(input_count);
     let count=(cycles*input_count).min(120);
-    let duration=total_seconds as f64/count as f64;
-    (0..count).map(|i|(i%input_count,duration)).collect()
+    let frames = total_seconds as usize * 30;
+    (0..count).map(|i| (i % input_count,
+        (frames / count + usize::from(i < frames % count)) as f64 / 30.0)).collect()
 }
 
 fn sample_start(duration: f64, clip_seconds: f64, index: usize) -> f64 {
@@ -236,12 +247,33 @@ struct RenderRequest {
     target_seconds: u32,
     #[serde(default)]
     start_seconds: Vec<Option<f64>>,
+    #[serde(default)]
+    end_seconds: Vec<Option<f64>>,
+    #[serde(default = "default_format")]
+    format: String,
 }
+
+fn default_format() -> String { "9:16".into() }
 
 #[tauri::command]
 async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, SelectedFolder>, request: RenderRequest) -> Result<Option<String>, String> {
     let root = state.0.lock().map_err(|_| "Dossier USB indisponible.")?
       .clone().ok_or("Choisis d'abord un dossier USB.")?;
+    validate_render_request(&request)?;
+    let Some(output) = rfd::FileDialog::new()
+        .add_filter("Vidéo MP4", &["mp4"])
+        .set_file_name("road-to-p1-montage.mp4")
+        .save_file() else { return Ok(None); };
+    if output.extension().and_then(|s|s.to_str()).map(|s|s.eq_ignore_ascii_case("mp4")) != Some(true) {
+        return Err("La sortie doit être un fichier MP4.".into());
+    }
+    let encoder=video_tool(&app,"ffmpeg")?;
+    let probe=video_tool(&app,"ffprobe")?;
+    tauri::async_runtime::spawn_blocking(move || render_montage(&root,&output,&encoder,&probe,&request).map(Some))
+        .await.map_err(|e|format!("Erreur de rendu : {e}"))?
+}
+
+fn validate_render_request(request: &RenderRequest) -> Result<(),String> {
     if request.relative_paths.is_empty() || request.relative_paths.len() > 30 ||
        request.target_seconds < 5 || request.target_seconds > 600 {
         return Err("Sélection ou durée invalide (1 à 30 médias, 5 à 600 secondes).".into());
@@ -252,24 +284,56 @@ async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, Sele
     if request.start_seconds.iter().flatten().any(|t|!t.is_finite()||*t<0.0) {
         return Err("Un minutage de scène est invalide.".into());
     }
-    let Some(output) = rfd::FileDialog::new()
-        .add_filter("Vidéo MP4", &["mp4"])
-        .set_file_name("road-to-p1-montage.mp4")
-        .save_file() else { return Ok(None); };
-    if output.extension().and_then(|s|s.to_str()).map(|s|s.eq_ignore_ascii_case("mp4")) != Some(true) {
-        return Err("La sortie doit être un fichier MP4.".into());
+
+    if !["9:16","16:9"].contains(&request.format.as_str()) {return Err("Format invalide.".into());}
+    if !request.end_seconds.is_empty() && request.end_seconds.len()!=request.relative_paths.len() {return Err("Fins de coupe incohérentes.".into());}
+    for (i,end) in request.end_seconds.iter().enumerate() {
+        if let Some(end)=end {
+            let start=request.start_seconds.get(i).and_then(|t|*t).unwrap_or(0.0);
+            if !end.is_finite() || *end<=start {return Err("Fin de coupe invalide.".into());}
+        }
     }
-    let encoder=video_tool(&app,"ffmpeg")?;
-    let probe=video_tool(&app,"ffprobe")?;
-    tauri::async_runtime::spawn_blocking(move || {
+    Ok(())
+}
+
+fn video_command(binary: &Path) -> Command {
+    let mut command=Command::new(binary);
+    #[cfg(windows)] {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x08000000);
+    }
+    command
+}
+
+fn probe_media(probe: &Path, file: &Path) -> Result<(f64,bool),String> {
+    let result=video_command(probe).args(["-v","error","-show_entries","format=duration:stream=codec_type","-of","json"])
+        .arg(file).output().map_err(|e|e.to_string())?;
+    if !result.status.success() {return Err(format!("Média illisible : {}",file.display()));}
+    let data:serde_json::Value=serde_json::from_slice(&result.stdout).map_err(|e|e.to_string())?;
+    let duration=data["format"]["duration"].as_str().and_then(|s|s.parse::<f64>().ok()).unwrap_or(0.0);
+    if !duration.is_finite() || duration<=0.0 {return Err("Durée média invalide.".into());}
+    let has_audio=data["streams"].as_array().map(|s|s.iter().any(|s|s["codec_type"]=="audio")).unwrap_or(false);
+    Ok((duration,has_audio))
+}
+
+fn render_montage(root: &Path, output: &Path, encoder: &Path, probe: &Path, request: &RenderRequest) -> Result<String, String> {
+        validate_render_request(request)?;
         let root = root.canonicalize().map_err(|e|e.to_string())?;
         let parent=output.parent().ok_or("Dossier de sortie invalide.")?
             .canonicalize().map_err(|e|e.to_string())?;
         if parent.starts_with(&root) {return Err("Choisis un dossier de sortie en dehors des vidéos USB.".into());}
+        if output.exists() || std::fs::symlink_metadata(output).is_ok() {
+            return Err("Le fichier de sortie existe déjà. Choisis un nouveau nom.".into());
+        }
+        let project_output=output.with_extension("project.json");
+        if project_output.exists() { return Err("Le projet associé existe déjà. Choisis un nouveau nom.".into()); }
+        let (width,height)=if request.format=="16:9" {(1920,1080)} else {(1080,1920)};
+        let scale=format!("scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30");
+        let mut edit_clips=Vec::new();
         let temp=tempfile::tempdir().map_err(|e|e.to_string())?;
         let mut segments=Vec::new();
         let mut scene_cache: HashMap<PathBuf, Vec<f64>>=HashMap::new();
-        let mut duration_cache: HashMap<PathBuf, f64>=HashMap::new();
+        let mut metadata_cache: HashMap<PathBuf, (f64,bool)>=HashMap::new();
         let mut used_starts: HashMap<PathBuf, Vec<f64>>=HashMap::new();
         let plan=montage_plan(request.target_seconds,request.relative_paths.len());
         for (index,(source_index,seconds_per_clip)) in plan.iter().copied().enumerate() {
@@ -283,45 +347,27 @@ async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, Sele
             if !file.starts_with(&root) || !file.is_file() {
                 return Err("Vidéo inaccessible dans le dossier USB.".into());
             }
-            if kind(rel)==Some("Photo") {
-                if !matches!(rel.extension().and_then(|s|s.to_str()).map(|s|s.to_ascii_lowercase()).as_deref(),Some("jpg"|"jpeg"|"png"|"webp")) {
-                    return Err("Format photo non pris en charge pour le MP4 : utilise JPG, PNG ou WebP.".into());
-                }
-                let segment=temp.path().join(format!("clip-{index:04}.mp4"));
-                let status=Command::new(&encoder)
-                    .args(["-hide_banner","-loglevel","error","-y","-loop","1","-framerate","30","-i"])
-                    .arg(&file).args(["-t",&seconds_per_clip.to_string(),"-vf",
-                        "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30",
-                        "-an","-c:v","libx264","-pix_fmt","yuv420p","-preset","veryfast"])
-                    .arg(&segment).status().map_err(|e|format!("Photo impossible à lire : {e}"))?;
-                if !status.success() {return Err(format!("Erreur de rendu sur la photo {}",index+1));}
-                segments.push(segment);
-                continue;
+            let photo=kind(rel)==Some("Photo");
+            if photo && !matches!(rel.extension().and_then(|s|s.to_str()).map(|s|s.to_ascii_lowercase()).as_deref(),Some("jpg"|"jpeg"|"png"|"webp")) {
+                return Err("Format photo non pris en charge : utilise JPG, PNG ou WebP.".into());
             }
-            // Inspect duration locally and avoid always starting at the first frame.
-            let duration=*duration_cache.entry(file.clone()).or_insert_with(|| {
-                let result=Command::new(&probe).args(["-v","error","-show_entries","format=duration",
-                    "-of","default=noprint_wrappers=1:nokey=1"]).arg(&file).output();
-                match result {
-                    Ok(output) if output.status.success() =>
-                        String::from_utf8_lossy(&output.stdout).trim().parse::<f64>().unwrap_or(0.0),
-                    _=>0.0
-                }
-            });
-            if !duration.is_finite() || duration <= 0.0 {return Err(format!("Durée invalide pour la vidéo {}",index+1));}
-            // Repeat short source footage to fill its allocated montage slot.
-            let clip_seconds=seconds_per_clip.max(0.1);
+            let (duration,has_audio)=if photo {(seconds_per_clip,false)} else {
+                if !metadata_cache.contains_key(&file) { metadata_cache.insert(file.clone(), probe_media(probe,&file)?); }
+                metadata_cache[&file]
+            };
+            let clip_seconds=seconds_per_clip;
             let max_start=(duration-clip_seconds).max(0.0);
             let previous=used_starts.entry(file.clone()).or_default();
             let requested_start=request.start_seconds.get(source_index).and_then(|t|*t);
-            let start=if let Some(time)=requested_start {
+            let start=if photo {0.0} else if let Some(time)=requested_start {
                 // Exact timing reviewed in Library: do not waste time with scene detection.
-                time.min(max_start)
+                if time>=duration { return Err(format!("Point de coupe hors de la vidéo : {path}")); }
+                time
             } else {
                 let fallback=sample_start(duration,clip_seconds,index);
                 let inspect=duration.min(90.0);
                 let scene_times=scene_cache.entry(file.clone()).or_insert_with(|| {
-                    let analysis=Command::new(&encoder)
+                    let analysis=video_command(&encoder)
                         .args(["-hide_banner","-nostdin","-loglevel","info","-t",&inspect.to_string(),"-i"])
                         .arg(&file).args(["-vf","fps=2,select='gt(scene,0.15)',showinfo",
                             "-an","-f","null","-"]).output();
@@ -335,15 +381,27 @@ async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, Sele
                 choose_nonrepeating_start(&eligible,fallback,max_start,index,clip_seconds,previous)
             };
             previous.push(start);
-            let segment=temp.path().join(format!("clip-{index:04}.mp4"));
-            let status=Command::new(&encoder)
-                .args(["-hide_banner","-loglevel","error","-y","-stream_loop","-1","-ss",&start.to_string(),"-i"])
-                .arg(&file).args(["-t",&clip_seconds.to_string(),"-vf",
-                    "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30",
-                    "-an","-c:v","libx264","-pix_fmt","yuv420p","-preset","veryfast"])
-                .arg(&segment)
-                .status().map_err(|e|format!("FFmpeg doit être installé sur le PC : {e}"))?;
-            if !status.success() {return Err(format!("Erreur FFmpeg sur la vidéo {}",index+1));}
+            let end=request.end_seconds.get(source_index).and_then(|t|*t).unwrap_or(duration);
+            if !photo && (end>duration+0.05 || end<=start) { return Err(format!("Fin de coupe invalide : {path}")); }
+            let available=if photo {clip_seconds} else {(end.min(duration)-start).min(clip_seconds)};
+            let segment=temp.path().join(format!("clip-{index:04}.mov"));
+            let mut command=video_command(encoder);
+            command.args(["-hide_banner","-nostdin","-loglevel","error","-y"]);
+            if photo { command.args(["-loop","1","-framerate","30"]); }
+            else { command.args(["-ss",&start.to_string(),"-t",&available.to_string()]); }
+            command.arg("-i").arg(&file);
+            if !has_audio { command.args(["-f","lavfi","-i","anullsrc=r=48000:cl=stereo"]); }
+            // PCM intermediate audio avoids AAC priming gaps at every cut. AAC is encoded once at assembly.
+            command.args(["-map","0:v:0","-map",if has_audio {"0:a:0"} else {"1:a:0"},
+                "-t",&clip_seconds.to_string(),"-vf",&format!("{scale},tpad=stop_mode=clone:stop_duration={clip_seconds}"),
+                "-af","aresample=48000,apad","-ar","48000","-ac","2","-c:a","pcm_s16le",
+                "-c:v","libx264","-pix_fmt","yuv420p","-preset","veryfast","-video_track_timescale","90000"]);
+            let status=command.arg(&segment).output().map_err(|e|format!("Moteur vidéo intégré indisponible : {e}"))?;
+            if !status.status.success() {return Err(format!("Erreur FFmpeg sur {path} : {}",String::from_utf8_lossy(&status.stderr)));}
+            edit_clips.push(serde_json::json!({"relativePath":path,"category":if photo {"Photo"} else {"Vidéo"},
+                "order":index,"inMs":(start*1000.0).round() as u64,"outMs":((start+available)*1000.0).round() as u64,
+                "durationMs":(clip_seconds*1000.0).round() as u64,"hasAudio":has_audio,
+                "holdLastFrameMs":((clip_seconds-available)*1000.0).round() as u64}));
             segments.push(segment);
         }
         let concat=temp.path().join("concat.txt");
@@ -353,26 +411,43 @@ async fn render_auto_montage(app: tauri::AppHandle, state: tauri::State<'_, Sele
         }).collect::<Vec<_>>().join("\n");
         std::fs::write(&concat,entries).map_err(|e|e.to_string())?;
         let tmp_output=temp.path().join("montage.mp4");
-        let status=Command::new(&encoder)
+        let status=video_command(&encoder)
             .args(["-hide_banner","-loglevel","error","-y","-f","concat","-safe","0","-i"])
-            .arg(&concat).args(["-c","copy","-movflags","+faststart"]).arg(&tmp_output)
+            .arg(&concat).args(["-map","0:v:0","-map","0:a:0","-c:v","copy","-c:a","aac","-b:a","192k","-t",&request.target_seconds.to_string(),"-movflags","+faststart"]).arg(&tmp_output)
             .status().map_err(|e|e.to_string())?;
         if !status.success(){return Err("Assemblage vidéo impossible.".into());}
         // Check the actual result before copying anything into the user's destination.
-        let verified=Command::new(&probe)
+        let verified=video_command(&probe)
             .args(["-v","error","-show_entries","format=duration","-of","default=noprint_wrappers=1:nokey=1"])
             .arg(&tmp_output).output().map_err(|e|format!("Vérification MP4 impossible : {e}"))?;
         if !verified.status.success() {return Err("Le fichier MP4 assemblé est illisible.".into());}
         let actual=String::from_utf8_lossy(&verified.stdout).trim().parse::<f64>()
             .map_err(|_|"Impossible de vérifier la durée du montage.".to_string())?;
         if !actual.is_finite() || actual<=0.0 ||
-           (actual-request.target_seconds as f64).abs()>2.0 {
+           (actual-request.target_seconds as f64).abs()>0.15 {
             return Err(format!("Montage incomplet : {:.1} s au lieu des {} s demandées. Aucun fichier incomplet enregistré.",actual,request.target_seconds));
         }
-        std::fs::copy(&tmp_output,&output).map_err(|e|format!("Enregistrement MP4 impossible : {e}"))?;
-        Ok(Some(output.to_string_lossy().to_string()))
-    }).await.map_err(|e|format!("Erreur de rendu : {e}"))?
+        let (_,has_audio)=probe_media(probe,&tmp_output)?;
+        if !has_audio {return Err("Piste audio absente du montage.".into());}
+        let project=serde_json::json!({"schemaVersion":1,"kind":"road-to-p1-usb-draft",
+            "sourceLabel":root.file_name().unwrap_or_default().to_string_lossy(),
+            "targetDurationMs":request.target_seconds*1000,"output":{"width":width,"height":height,"fps":30},
+            "clips":edit_clips});
+        // Exclusive creation also rejects symlinks and hard links to existing source files.
+        let mut saved=std::fs::OpenOptions::new().write(true).create_new(true).open(output).map_err(|e|e.to_string())?;
+        let result=(|| -> Result<(),String> {
+            std::io::copy(&mut std::fs::File::open(&tmp_output).map_err(|e|e.to_string())?,&mut saved).map_err(|e|e.to_string())?;
+            saved.sync_all().map_err(|e|e.to_string())?;
+            let mut project_file=std::fs::OpenOptions::new().write(true).create_new(true).open(&project_output).map_err(|e|e.to_string())?;
+            use std::io::Write;
+            project_file.write_all(serde_json::to_string_pretty(&project).map_err(|e|e.to_string())?.as_bytes()).map_err(|e|e.to_string())?;
+            Ok(())
+        })();
+        drop(saved);
+        if let Err(error)=result { let _=std::fs::remove_file(output); return Err(error); }
+        Ok(output.to_string_lossy().to_string())
 }
+
 
 fn main() {
     tauri::Builder::default()
@@ -381,6 +456,9 @@ fn main() {
         .run(tauri::generate_context!())
         .expect("Erreur au lancement de Road to P1 Media");
 }
+
+#[cfg(test)]
+mod render_tests;
 
 #[cfg(test)]
 mod tests {

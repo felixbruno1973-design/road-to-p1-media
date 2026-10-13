@@ -226,7 +226,11 @@
       status.textContent='Analyse du dossier USB…';
       try {
         const result=await invoke('choose_and_scan_folder');
-        if(!result) {status.textContent='Sélection annulée.';pendingMontageRequest=null;return;}
+        if(!result) {
+          status.textContent='Sélection annulée.';pendingMontageRequest=null;
+          window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{count:0,message:status.textContent}}));
+          return;
+        }
         all=result.files; source=result.sourceName; page=0;selected.clear();sceneLabels.clear();sceneMoments.clear();selectionStatus();
         status.textContent=result.totalCount+' média(s) recensé(s)'+
           (result.warnings.length?' • '+result.warnings.length+' avertissement(s)':'');
@@ -238,6 +242,7 @@
         }
       } catch(err) {
         status.textContent='Analyse impossible : '+String(err);
+        window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{count:0,message:status.textContent}}));
         pendingMontageRequest=null;
       } finally {button.disabled=false;}
     });
@@ -250,13 +255,14 @@
       }
       if(!all.length){
         pendingMontageRequest=request;
-        window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{count:0,message:'Sélectionne ton dossier USB : la recherche reprendra automatiquement après son analyse.'}}));
+        window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{count:0,pending:true,message:'Sélectionne ton dossier USB : la recherche reprendra automatiquement après son analyse.'}}));
         button.click();
         return;
       }
       let ranking;
       try {
         const module=await import('./brief-ranking.mjs');
+        // Include the chosen folder name; its files may only have camera timestamps.
         ranking=module.chooseForBrief(all,request.instruction,10);
         // Tags chosen after inspecting the contact sheet take precedence over filenames.
         const planner=await import('./visual-scene-classifier.mjs');
@@ -292,11 +298,11 @@
         window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{count:0,message:'Ce dossier ne contient aucune vidéo reconnue (MP4, MOV, AVI, MKV, WEBM ou M4V). Sélectionne un dossier contenant des vidéos. Les photos ne sont pas encore prises en charge par le moteur MP4.'}}));
         return;
       }
-      window.dispatchEvent(new CustomEvent('rtp1:usb-media-selected',{detail:{
-        source,items:[...selected.values()].map(x=>({relativePath:x.relativePath,category:x.category,sizeBytes:x.sizeBytes}))
-      }}));
+      const items=candidates.slice(0,30).map(x=>({relativePath:x.file.relativePath,category:x.file.category,
+        startSeconds:x.startSeconds??null,endSeconds:x.endSeconds??null}));
+      window.dispatchEvent(new CustomEvent('rtp1:usb-media-selected',{detail:{source,items}}));
       window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{
-        count:candidates.length,items:candidates.map(x=>({relativePath:x.file.relativePath,category:x.file.category,startSeconds:x.startSeconds??null})),message:candidates.length+' extraits prévus à partir de '+selected.size+' vidéo(s). '+ranking.warning+' Préparation du MP4…'
+        count:items.length,items,message:items.length+' extraits prévus à partir de '+selected.size+' média(s). '+ranking.warning+' Préparation du MP4…'
       }}));
     });
     panel.append(title,explanation,button,status,suggestControls,suggestionStatus,controls,count,list,more,selectionLabel,studioButton);

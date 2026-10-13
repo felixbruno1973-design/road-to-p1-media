@@ -19,5 +19,3 @@ jobs:
         run: npm run check
       - name: Run test suite
         run: npm test
-      - name: Prepare desktop assets
-        run: npm run desktop:prepare

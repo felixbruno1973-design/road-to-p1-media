@@ -1,6 +1,6 @@
 [package]
 name = "road-to-p1-media-desktop"
-version = "0.1.0"
+version = "0.1.1"
 description = "Local-only media library shell for Road to P1 Media"
 edition = "2021"
 

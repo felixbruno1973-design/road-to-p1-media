@@ -1,19 +1,14 @@
-name: Windows desktop validation
+name: Windows installer
 on:
-  pull_request:
-    paths:
-      - 'src-tauri/**'
-      - 'desktop-usb.js'
-      - 'studio-assistant.js'
-      - 'studio-usb-bridge.js'
-      - 'scripts/render-local-mp4.mjs'
-      - 'tests/**'
-      - 'scripts/prepare-desktop.mjs'
-      - 'scripts/local-object-detector-entry.mjs'
-      - 'scripts/generate-windows-icon.mjs'
-      - 'package.json'
-      - '.github/workflows/windows-desktop.yml'
+  push:
+    branches: [feature/local-usb-video-engine]
   workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: windows-installer-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   windows:
@@ -24,24 +19,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install local AI build dependencies
-        run: npm install --no-audit --no-fund
-      - name: Prepare offline image recognition model
-        shell: pwsh
-        run: |
-          $base='https://storage.googleapis.com/tfjs-models/savedmodel/ssdlite_mobilenet_v2'
-          $dir='model-assets/ssdlite_mobilenet_v2'
-          New-Item -ItemType Directory -Force $dir | Out-Null
-          foreach ($name in @('model.json','group1-shard1of5','group1-shard2of5','group1-shard3of5','group1-shard4of5','group1-shard5of5')) {
-            Invoke-WebRequest -Uri "$base/$name" -OutFile "$dir/$name"
-            if ((Get-Item "$dir/$name").Length -lt 100000) { throw "Incomplete object-detection asset: $name" }
-          }
-      - name: Prepare desktop frontend
-        run: npm run desktop:prepare
-      - name: Check JavaScript
-        run: npm run check
-      - name: Test JavaScript
-        run: npm test
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run check
+      - run: npm test
+      - run: npm run desktop:model
+      - run: npm run desktop:prepare
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -50,49 +33,47 @@ jobs:
         shell: pwsh
         run: |
           choco install ffmpeg -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'FFmpeg installation failed' }
           New-Item -ItemType Directory -Force src-tauri/resources | Out-Null
           foreach ($name in @('ffmpeg','ffprobe')) {
             $binary = Get-ChildItem 'C:/ProgramData/chocolatey/lib/ffmpeg/tools' -Filter ($name + '.exe') -Recurse -File | Select-Object -First 1
-            if (-not $binary) { throw ('Missing actual FFmpeg binary: ' + $name) }
-            Copy-Item $binary.FullName ("src-tauri/resources/" + $name + ".exe") -Force
-            & ("src-tauri/resources/" + $name + ".exe") -version | Select-Object -First 1
+            if (-not $binary) { throw ('Missing FFmpeg binary: ' + $name) }
+            Copy-Item $binary.FullName ("src-tauri/resources/" + $name + ".exe")
+            & ("src-tauri/resources/" + $name + ".exe") -version
+            if ($LASTEXITCODE -ne 0) { throw 'Bundled video engine cannot start' }
           }
-      - name: Smoke-test bundled MP4 engine
-        shell: pwsh
-        run: |
-          $ffmpeg = "src-tauri/resources/ffmpeg.exe"
-          $ffprobe = "src-tauri/resources/ffprobe.exe"
-          & $ffmpeg -hide_banner -loglevel error -y -f lavfi -i "color=c=blue:s=320x180:r=30" -t 1 -an -c:v libx264 -pix_fmt yuv420p "$env:RUNNER_TEMP/test-montage.mp4"
-          if ($LASTEXITCODE -ne 0) { throw 'Local MP4 encoding failed' }
-          $duration = & $ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$env:RUNNER_TEMP/test-montage.mp4"
-          if ($LASTEXITCODE -ne 0) { throw 'Local MP4 probing failed' }
-          $seconds = [double]::Parse(($duration -join '').Trim(), [System.Globalization.CultureInfo]::InvariantCulture)
-          if ($seconds -lt 0.5) { throw 'Output MP4 too short' }
-      - name: Test photo clips and scene detection with bundled FFmpeg
-        shell: pwsh
-        run: |
-          $ffmpeg = "src-tauri/resources/ffmpeg.exe"
-          $ffprobe = "src-tauri/resources/ffprobe.exe"
-          $photo = "$env:RUNNER_TEMP/karting-test.png"
-          $clip = "$env:RUNNER_TEMP/photo-clip.mp4"
-          & $ffmpeg -hide_banner -loglevel error -y -f lavfi -i "color=c=red:s=640x480" -frames:v 1 $photo
-          if ($LASTEXITCODE -ne 0) { throw 'Synthetic photo creation failed' }
-          & $ffmpeg -hide_banner -loglevel error -y -loop 1 -framerate 30 -i $photo -t 3 -vf "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30" -an -c:v libx264 -pix_fmt yuv420p -preset veryfast $clip
-          if ($LASTEXITCODE -ne 0) { throw 'Photo-to-video conversion failed' }
-          $duration = & $ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 $clip
-          $seconds = [double]::Parse(($duration -join '').Trim(), [System.Globalization.CultureInfo]::InvariantCulture)
-          if ([math]::Abs($seconds - 3.0) -gt 0.3) { throw "Incorrect photo clip duration: $seconds" }
-          & $ffmpeg -hide_banner -nostdin -loglevel error -t 1 -i $clip -vf "fps=2,select='gt(scene,0.15)',showinfo" -an -f null -
-          if ($LASTEXITCODE -ne 0) { throw 'Scene detection filter failed' }
-      - name: Compile native tests without running Windows installer
+      - name: Native unit tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
-      - name: Install Tauri CLI
-        run: cargo install tauri-cli --version '^2' --locked
+      - name: Native 60-second render, audio, cuts and source integrity
+        run: cargo test --manifest-path src-tauri/Cargo.toml renders_sixty_seconds -- --ignored --nocapture
+      - name: JavaScript renderer integration
+        shell: pwsh
+        run: |
+          $env:RTP1_FFMPEG = (Resolve-Path src-tauri/resources/ffmpeg.exe).Path
+          $env:RTP1_FFPROBE = (Resolve-Path src-tauri/resources/ffprobe.exe).Path
+          node --test tests/render-integration.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Renderer integration failed' }
       - name: Build Windows installer
-        run: cargo tauri build
-      - name: Publish installer as CI artifact
+        run: npx --no-install tauri build --bundles nsis
+      - name: Installer checksum and build identity
+        shell: pwsh
+        run: |
+          $dir = 'src-tauri/target/release/bundle/nsis'
+          $files = Get-ChildItem "$dir/*.exe"
+          if (-not $files) { throw 'Installer missing' }
+          $files | ForEach-Object { "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)" } | Set-Content "$dir/SHA256SUMS.txt"
+          "Commit: $env:GITHUB_SHA`nRun: $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID" | Set-Content "$dir/BUILD.txt"
+      - name: Publish installer
+        id: installer
         uses: actions/upload-artifact@v4
         with:
-          name: road-to-p1-media-windows-prototype
-          path: src-tauri/target/release/bundle/nsis/*.exe
+          name: road-to-p1-media-windows-${{ github.sha }}
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/nsis/SHA256SUMS.txt
+            src-tauri/target/release/bundle/nsis/BUILD.txt
           if-no-files-found: error
+          retention-days: 30
+      - name: Download link
+        shell: pwsh
+        run: Add-Content $env:GITHUB_STEP_SUMMARY '[Télécharger l’installateur Windows](${{ steps.installer.outputs.artifact-url }})'

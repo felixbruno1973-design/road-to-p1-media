@@ -4,3 +4,9 @@ node_modules/
 .wrangler/
 dist/
 *.zip
+
+desktop-dist/
+model-assets/
+src-tauri/target/
+src-tauri/resources/
+src-tauri/icons/

@@ -47,7 +47,7 @@ export function selectTaggedMoments(moments,slots=12) {
   for(let i=0;i<slots;i++){
     const cutaway=track.length>0&&(i+1)%5===0;
     const selected=cutaway?track[(trackIndex++)%track.length]:humans[(peopleIndex++)%humans.length];
-    items.push({file:selected.file,startSeconds:selected.startSeconds});
+    items.push({file:selected.file,startSeconds:selected.startSeconds,endSeconds:selected.endSeconds??(selected.startSeconds+5)});
   }
   return {items,warning:'Montage préparé à partir des moments vérifiés dans les aperçus de Library.'};
 }
