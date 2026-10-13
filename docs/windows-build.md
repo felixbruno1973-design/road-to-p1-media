@@ -1,36 +1,49 @@
-# Build Windows — ROAD TO P1 Media (prototype USB)
+# Road to P1 Media Windows — test USB 0.1.1
 
-## Prérequis
+Le travail reste sur `feature/local-usb-video-engine`. Aucun workflow ne fusionne cette branche dans `main` et aucun média local n'est envoyé à GitHub.
 
-Windows 10/11, Node.js 20+, Rust stable (toolchain MSVC), Microsoft C++ Build Tools et WebView2 Runtime. Installer les prérequis Tauri 2 avant de compiler.
+## Télécharger l'installateur
 
-## Commandes
+Dans [GitHub Actions](https://github.com/felixbruno1973-design/road-to-p1-media/actions/workflows/windows-desktop.yml), ouvrir une exécution **Windows installer** réussie correspondant au commit à tester. Le résumé contient le lien **Télécharger l’installateur Windows**. L'archive `road-to-p1-media-windows-<commit>` contient le `.exe`, `SHA256SUMS.txt` et `BUILD.txt` (commit et exécution). Les artefacts sont conservés 30 jours ; GitHub peut demander une connexion.
+
+Les push sur la branche expérimentale lancent la compilation. Un lancement manuel est aussi possible avec `workflow_dispatch` lorsque le workflow est accessible dans l'interface GitHub. L'installateur n'est publié que si les tests JavaScript, les tests natifs, le rendu natif de 60 secondes et la compilation réussissent.
+
+## Test depuis Soucy
+
+1. Installer puis ouvrir Road to P1 Media sur Windows 10/11 x64.
+2. Dans Library, choisir le dossier Soucy du disque USB. Le catalogue reste temporaire pour cette session.
+3. Dans Studio, saisir « Fais-moi un montage de 60 secondes depuis Soucy » puis créer le montage. La durée par défaut est 60 s ; « horizontal » produit du 1920 × 1080, sinon le rendu est vertical 1080 × 1920, à 30 images/s.
+4. Choisir **un nouveau nom** dans un dossier situé en dehors des médias sources. Les fichiers existants ne sont jamais écrasés.
+5. Vérifier le MP4 et le fichier voisin `<nom>.project.json` : ce dernier conserve les références répétées, l'ordre, les entrées/sorties effectivement utilisées, le son et les éventuelles prolongations d'image.
+
+Le son de la première piste audio de chaque vidéo est conservé et réencodé en AAC stéréo. Les photos et vidéos muettes reçoivent du silence. Si une coupe est plus courte que sa place dans le montage, la dernière image est prolongée et le complément audio reste silencieux. Un point d'entrée hors de la vidéo est refusé ; il n'est pas déplacé silencieusement.
+
+Les scènes vérifiées dans Library priment sur la sélection par noms. L'identification d'objets reste indicative : elle ne prouve pas une conversation, une opération mécanique ni l'identité d'un pilote. Les originaux sont uniquement lus, les intermédiaires sont temporaires et la sortie est vérifiée avant son enregistrement.
+
+## Compiler et tester localement
+
+Prérequis : Node.js 22, Rust stable MSVC, Microsoft C++ Build Tools, WebView2 et FFmpeg/FFprobe. Le CLI Tauri est une dépendance npm verrouillée ; aucune installation globale n'est nécessaire.
 
 ```powershell
-git switch feature/local-usb-video-engine
-npm test
+npm ci
 npm run check
+npm test
+npm run desktop:model
 npm run desktop:prepare
+# Placer les vrais binaires ffmpeg.exe et ffprobe.exe dans src-tauri/resources/.
 cargo test --manifest-path src-tauri/Cargo.toml
-cargo tauri build
+cargo test --manifest-path src-tauri/Cargo.toml renders_sixty_seconds -- --ignored --nocapture
+$env:RTP1_FFMPEG = (Resolve-Path src-tauri/resources/ffmpeg.exe).Path
+$env:RTP1_FFPROBE = (Resolve-Path src-tauri/resources/ffprobe.exe).Path
+node --test tests/render-integration.test.mjs
+npm run desktop:build
 ```
 
-**Note :** si `cargo tauri` est inconnu, installer le CLI Tauri version 2 avec `cargo install tauri-cli --version "^2" --locked`.
+Le téléchargement du modèle a lieu pendant la préparation, puis le modèle et les moteurs vidéo sont inclus dans l'application. La compilation CI installe FFmpeg et copie ses exécutables réels. La sortie NSIS se trouve dans `src-tauri/target/release/bundle/nsis/`.
 
-Le contenu du navigateur à emballer est produit dans `desktop-dist/` et ne comprend pas les sources Rust, les tests ni le dépôt Git.
+## Limites du prototype
 
-## Vérification manuelle
-
-1. Lancer l'application Windows sur le même PC que le disque USB.
-2. Dans Library, cliquer « Choisir un dossier du disque USB ».
-3. Sélectionner un petit dossier de test (images + vidéos).
-4. Vérifier noms, décompte, tailles et absence de modification des originaux.
-5. Fermer puis relancer l'application : **le catalogue USB de ce prototype n'est pas encore sauvegardé**.
-6. Vérifier dans la version web que le nouveau panneau est **absent** et que l'import IndexedDB fonctionne comme auparavant.
-
-## Limites actuelles
-
-- Le scanner natif parcourt le dossier synchroniquement et renvoie jusqu'à 500 000 métadonnées en une fois. Pour une grande vidéothèque, prévoir tâche asynchrone, pagination et SQLite avant le déploiement.
-- Les fichiers USB ne sont pas encore visibles dans le navigateur de médias Studio ; aucun rendu FFmpeg.
-- L'identification des karts et la sélection IA ne sont pas développées.
-- Ne pas fusionner sur `main` avant tests.
+- Le catalogue et les classifications manuelles ne sont pas restaurés au redémarrage ; exporter le projet pour conserver les coupes.
+- La progression détaillée et l'annulation d'un rendu natif ne sont pas encore disponibles.
+- L'assistant natif accepte jusqu'à 30 références de médias et 5 à 600 secondes ; les photos compatibles sont JPG, PNG et WebP.
+- L'installateur de test n'est pas signé avec un certificat éditeur. Le workflow ne publie aucune version stable.

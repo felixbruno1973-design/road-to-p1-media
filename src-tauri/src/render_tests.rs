@@ -33,7 +33,7 @@ fn renders_sixty_seconds_with_audio_cuts_and_unchanged_sources() {
     let temp=tempfile::tempdir().unwrap();
     let root=temp.path().join("SOUCY été");std::fs::create_dir(&root).unwrap();
     for (name,args) in [
-        ("son.mp4",vec!["-f","lavfi","-i","color=blue:s=320x180:r=30","-f","lavfi","-i","sine=frequency=880:sample_rate=44100","-t","6","-c:v","libx264","-c:a","aac"]),
+        ("son.mp4",vec!["-f","lavfi","-i","color=blue:s=320x180:r=30000/1001","-f","lavfi","-i","sine=frequency=880:sample_rate=44100","-t","6","-c:v","libx264","-c:a","aac","-color_primaries","bt709"]),
         ("muet.mp4",vec!["-f","lavfi","-i","color=red:s=320x180:r=30","-t","1","-an","-c:v","libx264"]),
         ("photo.png",vec!["-f","lavfi","-i","color=green:s=320x180","-frames:v","1"])
     ] {
@@ -46,6 +46,11 @@ fn renders_sixty_seconds_with_audio_cuts_and_unchanged_sources() {
     render_montage(&root,&output,&encoder,&probe,&r).unwrap();
     let (duration,audio)=probe_media(&probe,&output).unwrap();
     assert!((duration-60.0).abs()<0.15);assert!(audio);
+    let video=video_command(&probe).args(["-v","error","-select_streams","v:0","-show_entries","stream=nb_frames,avg_frame_rate,color_space,color_transfer,color_primaries","-of","json"]).arg(&output).output().unwrap();
+    let video:serde_json::Value=serde_json::from_slice(&video.stdout).unwrap();
+    assert_eq!(video["streams"][0]["nb_frames"],"1800");
+    assert_eq!(video["streams"][0]["avg_frame_rate"],"30/1");
+    assert_eq!(video["streams"][0]["color_space"],"bt709");
     let project:serde_json::Value=serde_json::from_slice(&std::fs::read(output.with_extension("project.json")).unwrap()).unwrap();
     assert_eq!(project["clips"][0]["inMs"],2000);
     assert_eq!(project["clips"][0]["outMs"],4000);

@@ -328,7 +328,7 @@ fn render_montage(root: &Path, output: &Path, encoder: &Path, probe: &Path, requ
         let project_output=output.with_extension("project.json");
         if project_output.exists() { return Err("Le projet associé existe déjà. Choisis un nouveau nom.".into()); }
         let (width,height)=if request.format=="16:9" {(1920,1080)} else {(1080,1920)};
-        let scale=format!("scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30");
+        let scale=format!("scale={width}:{height}:force_original_aspect_ratio=decrease:out_color_matrix=bt709:out_range=tv,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30:start_time=0");
         let mut edit_clips=Vec::new();
         let temp=tempfile::tempdir().map_err(|e|e.to_string())?;
         let mut segments=Vec::new();
@@ -395,7 +395,8 @@ fn render_montage(root: &Path, output: &Path, encoder: &Path, probe: &Path, requ
             command.args(["-map","0:v:0","-map",if has_audio {"0:a:0"} else {"1:a:0"},
                 "-t",&clip_seconds.to_string(),"-vf",&format!("{scale},tpad=stop_mode=clone:stop_duration={clip_seconds}"),
                 "-af","aresample=48000,apad","-ar","48000","-ac","2","-c:a","pcm_s16le",
-                "-c:v","libx264","-pix_fmt","yuv420p","-preset","veryfast","-video_track_timescale","90000"]);
+                "-c:v","libx264","-pix_fmt","yuv420p","-preset","veryfast","-video_track_timescale","90000",
+                "-map_metadata","-1","-colorspace","bt709","-color_primaries","bt709","-color_trc","bt709","-color_range","tv"]);
             let status=command.arg(&segment).output().map_err(|e|format!("Moteur vidéo intégré indisponible : {e}"))?;
             if !status.status.success() {return Err(format!("Erreur FFmpeg sur {path} : {}",String::from_utf8_lossy(&status.stderr)));}
             edit_clips.push(serde_json::json!({"relativePath":path,"category":if photo {"Photo"} else {"Vidéo"},

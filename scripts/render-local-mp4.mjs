@@ -80,9 +80,10 @@ export async function render(project,{root,output,ffmpeg='ffmpeg',ffprobe='ffpro
       args.push('-i',source);
       if(!metadata?.hasAudio)args.push('-f','lavfi','-i','anullsrc=r=48000:cl=stereo');
       args.push('-map','0:v:0','-map',metadata?.hasAudio?'0:a:0':'1:a:0','-t',String(slot),
-        '-vf',`scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,tpad=stop_mode=clone:stop_duration=${slot}`,
+        '-vf',`scale=${width}:${height}:force_original_aspect_ratio=decrease:out_color_matrix=bt709:out_range=tv,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30:start_time=0,tpad=stop_mode=clone:stop_duration=${slot}`,
         '-af','aresample=48000,apad','-ar','48000','-ac','2','-c:a','pcm_s16le',
-        '-c:v','libx264','-pix_fmt','yuv420p','-preset','veryfast','-video_track_timescale','90000',segment);
+        '-c:v','libx264','-pix_fmt','yuv420p','-preset','veryfast','-video_track_timescale','90000',
+        '-map_metadata','-1','-colorspace','bt709','-color_primaries','bt709','-color_trc','bt709','-color_range','tv',segment);
       await runMedia(ffmpeg,args);
       segments.push(segment);
       clips.push({...clip,inMs:Math.round(timing.inSeconds*1000),outMs:Math.round((timing.inSeconds+available)*1000),durationMs:Math.round(slot*1000),hasAudio:!!metadata?.hasAudio,holdLastFrameMs:Math.round((slot-available)*1000)});
