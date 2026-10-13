@@ -10,6 +10,7 @@
     let pendingMontageRequest=null;
     const selected = new Map();
     const sceneLabels = new Map(); // session-only tags; never stored or uploaded
+    const sceneMoments = new Map();
     const panel = document.createElement('section');
     panel.className = 'panel';
     panel.style.cssText = 'margin:0 0 14px;padding:18px';
