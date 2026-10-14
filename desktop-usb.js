@@ -1,0 +1,312 @@
+/* Desktop-only USB catalogue. Existing IndexedDB Library remains untouched. */
+(() => {
+  'use strict';
+  const PAGE_SIZE = 50;
+  document.addEventListener('DOMContentLoaded', () => {
+    const library = document.querySelector('#view-library');
+    const invoke = window.__TAURI__?.core?.invoke;
+    if (!library || !invoke) return;
+    let all = [], source = '', page = 0;
+    let pendingMontageRequest=null;
+    const selected = new Map();
+    const sceneLabels = new Map(); // session-only tags; never stored or uploaded
+    const sceneMoments = new Map();
+    const panel = document.createElement('section');
+    panel.className = 'panel';
+    panel.style.cssText = 'margin:0 0 14px;padding:18px';
+    const title = document.createElement('h3');
+    title.textContent = 'Disque USB — catalogue externe (expérimental)';
+    const explanation = document.createElement('p');
+    explanation.textContent = 'Fichiers d’origine en lecture seule. Ce catalogue est temporaire et distinct de Library.';
+    const button = document.createElement('button');
+    button.className = 'btn primary';
+    button.type = 'button';
+    button.textContent = 'Choisir un dossier du disque USB';
+    const status = document.createElement('p');
+    status.setAttribute('role','status');
+    status.textContent = 'Aucun dossier analysé.';
+    const controls = document.createElement('div');
+    controls.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin:10px 0';
+    const search = document.createElement('input');
+    search.placeholder = 'Rechercher nom, dossier, circuit…';
+    search.setAttribute('aria-label','Rechercher dans les médias du disque USB');
+    search.className = 'search';
+    search.style.cssText = 'max-width:320px';
+    const type = document.createElement('select');
+    type.setAttribute('aria-label','Catégorie de média USB');
+    type.className = 'search';
+    type.style.cssText = 'max-width:150px';
+    for (const [value,label] of [['','Tous les médias'],['Vidéo','Vidéos'],['Photo','Photos'],['Audio','Audio']]) {
+      const option = document.createElement('option');
+      option.value=value; option.textContent=label; type.append(option);
+    }
+    const prompt=document.createElement('input');
+    prompt.className='search';
+    prompt.placeholder='Ex. Lara Annéville 2026 dépassement';
+    prompt.setAttribute('aria-label','Décrire les vidéos à rechercher localement');
+    prompt.style.cssText='min-width:250px;max-width:440px';
+    const suggest=document.createElement('button');
+    suggest.type='button';suggest.className='btn';
+    suggest.textContent='Proposer une sélection locale';
+    const suggestionStatus=document.createElement('p');
+    suggestionStatus.setAttribute('role','status');
+    suggest.addEventListener('click',()=>{
+      const terms=prompt.value.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('fr')
+        .split(/[^a-z0-9]+/).filter(w=>w.length>2 && !['une','des','les','pour','avec','video','videos','montage','reel','faire','moi','2026'].includes(w));
+      if(!terms.length){suggestionStatus.textContent='Indique au moins un lieu, un pilote ou un mot présent dans les noms de fichiers.';return;}
+      const ranked=all.filter(x=>x.category==='Vidéo').map(file=>{
+        const name=file.relativePath.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('fr');
+        const score=terms.reduce((total,w)=>total+(name.includes(w)?1:0),0);
+        return {file,score};
+      }).filter(x=>x.score>0).sort((a,b)=>b.score-a.score||a.file.relativePath.localeCompare(b.file.relativePath,'fr'));
+      selected.clear();
+      for(const x of ranked.slice(0,30))selected.set(x.file.relativePath,x.file);
+      suggestionStatus.textContent=ranked.length
+        ?selected.size+' résultat(s) proposés à partir des noms de fichiers et dossiers. Vérifie la sélection avant Studio : aucune analyse des images.'
+        :'Aucun nom de fichier ou dossier ne correspond à cette demande.';
+      selectionStatus();page=0;render();
+    });
+    const suggestControls=document.createElement('div');
+    suggestControls.style.cssText='display:flex;gap:8px;flex-wrap:wrap;margin:8px 0';
+    suggestControls.append(prompt,suggest);
+    const count = document.createElement('p');
+    const selectionLabel=document.createElement('p');
+    const studioButton=document.createElement('button');
+    studioButton.type='button';studioButton.className='btn';studioButton.disabled=true;
+    studioButton.textContent='Préparer la sélection Studio';
+    function selectionStatus(){selectionLabel.textContent=selected.size+' média(s) sélectionné(s)';studioButton.disabled=!selected.size;}
+    studioButton.addEventListener('click',()=>{
+      const detail={source,items:[...selected.values()].map(x=>({relativePath:x.relativePath,category:x.category,sizeBytes:x.sizeBytes}))};
+      window.dispatchEvent(new CustomEvent('rtp1:usb-media-selected',{detail}));
+      selectionLabel.textContent=detail.items.length+' média(s) prêts pour la future liaison Studio (lecture non disponible).';
+    });
+    count.setAttribute('aria-live','polite');
+    const list = document.createElement('div');
+    list.style.cssText = 'max-height:360px;overflow:auto';
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'btn';
+    more.textContent = 'Afficher 50 fichiers supplémentaires';
+    more.hidden=true;
+    controls.append(search,type);
+    const filtered = () => {
+      const q=search.value.trim().toLocaleLowerCase('fr');
+      return all.filter(f => (!type.value || f.category===type.value) &&
+        (!q || f.relativePath.toLocaleLowerCase('fr').includes(q)));
+    };
+    function render() {
+      const items = filtered();
+      const shown = Math.min(items.length,(page+1)*PAGE_SIZE);
+      list.replaceChildren();
+      for(const file of items.slice(0,shown)) {
+        const p=document.createElement('label');
+        p.style.cssText='display:flex;gap:8px;align-items:center;margin:6px 0';
+        const input=document.createElement('input');input.type='checkbox';input.checked=selected.has(file.relativePath);
+        input.addEventListener('change',()=>{if(input.checked)selected.set(file.relativePath,file);else selected.delete(file.relativePath);selectionStatus();});
+        const info=document.createElement('span');
+        info.textContent=file.category+' · '+file.relativePath+' · '+
+          (file.sizeBytes/1048576).toLocaleString('fr-FR',{maximumFractionDigits:1})+' Mo';
+        p.append(input,info);
+        if(file.category==='Vidéo') {
+          const inspect=document.createElement('button');
+          inspect.type='button';inspect.className='btn';
+          inspect.textContent='Infos vidéo';
+          const details=document.createElement('span');
+          details.setAttribute('aria-live','polite');
+          inspect.addEventListener('click',async event=>{
+            event.preventDefault();
+            inspect.disabled=true;details.textContent='Analyse…';
+            try {
+              const m=await invoke('probe_selected_video',{relativePath:file.relativePath});
+              const time=m.durationSeconds==null?'durée inconnue':Math.round(m.durationSeconds)+' s';
+              details.textContent=[time,m.width&&m.height?m.width+' × '+m.height:null,m.codec,m.frameRate?m.frameRate+' ips':null,m.hasAudio?'avec son':'sans son'].filter(Boolean).join(' · ');
+            }catch(error){details.textContent='Analyse indisponible : '+String(error)}
+            finally {inspect.disabled=false;}
+          });
+          const preview=document.createElement('button');
+          preview.type='button';preview.className='btn';preview.textContent='Voir 12 images';
+          const images=document.createElement('img');
+          images.alt='Aperçu local des passages de la vidéo toutes les cinq secondes';
+          images.style.cssText='display:none;max-width:100%;width:480px;margin:8px 0';
+          const momentsGrid=document.createElement('div');
+          momentsGrid.style.cssText='display:none;grid-template-columns:repeat(3,minmax(100px,1fr));gap:6px;margin-top:8px';
+          preview.addEventListener('click',async event=>{
+            event.preventDefault();
+            preview.disabled=true;
+            details.textContent='Extraction des images en cours…';
+            try {
+              images.src=await invoke('preview_video_frames',{relativePath:file.relativePath});
+              images.style.display='block';
+              momentsGrid.replaceChildren();
+              const saved=sceneMoments.get(file.relativePath)||new Map();
+              for(let frame=0;frame<12;frame++){
+                const label=document.createElement('label');
+                label.style.cssText='display:flex;flex-direction:column;gap:2px;font-size:12px';
+                const selector=document.createElement('select');
+                for(const [value,title] of [['','À ignorer'],['briefing','Échanges'],['mechanics','Mécanique'],['track','Piste']]){
+                  const option=document.createElement('option');option.value=value;option.textContent=title;selector.append(option);
+                }
+                selector.value=saved.get(frame)||'';
+                selector.addEventListener('change',()=>{
+                  const tags=sceneMoments.get(file.relativePath)||new Map();
+                  if(selector.value)tags.set(frame,selector.value);
+                  else tags.delete(frame);
+                  sceneMoments.set(file.relativePath,tags);
+                });
+                label.append(document.createTextNode('Vers '+frame*5+' s'),selector);
+                momentsGrid.append(label);
+              }
+              momentsGrid.style.display='grid';
+              details.textContent='Classe les moments intéressants ci-dessous pour les utiliser dans ton MP4.';
+            }catch(error){details.textContent='Aperçu indisponible : '+String(error);}
+            finally {preview.disabled=false;}
+          });
+          const ai=document.createElement('button');
+          ai.type='button';ai.className='btn';ai.textContent='Proposer des scènes (IA locale)';
+          ai.addEventListener('click',async event=>{
+            event.preventDefault();
+            if(!images.src.startsWith('data:image/')){
+              details.textContent='Commence par « Voir 12 images » pour préparer l’analyse locale.';
+              return;
+            }
+            ai.disabled=true;
+            let suggestions=0;
+            try{
+              const [{detectObjectsLocally},{classifyVisualDetections}]=await Promise.all([
+                import('./local-object-detector.mjs'),
+                import('./visual-scene-classifier.mjs')
+              ]);
+              const width=Math.floor(images.naturalWidth/3);
+              const height=Math.floor(images.naturalHeight/4);
+              const canvas=document.createElement('canvas');
+              canvas.width=width;canvas.height=height;
+              const ctx=canvas.getContext('2d',{willReadFrequently:true});
+              for(let frame=0;frame<12;frame++){
+                details.textContent='Analyse IA locale : image '+(frame+1)+'/12…';
+                ctx.drawImage(images,(frame%3)*width,Math.floor(frame/3)*height,width,height,0,0,width,height);
+                const detections=await detectObjectsLocally(canvas);
+                const guess=classifyVisualDetections(detections.map(x=>({label:x.class,score:x.score})));
+                const tags=sceneMoments.get(file.relativePath)||new Map();
+                if(guess.label!=='unknown'&&!tags.has(frame)){
+                  tags.set(frame,guess.label);
+                  sceneMoments.set(file.relativePath,tags);
+                  const selector=momentsGrid.querySelectorAll('select')[frame];
+                  if(selector)selector.value=guess.label;
+                  suggestions++;
+                }
+              }
+              details.textContent=suggestions
+                ? suggestions+' scènes proposées. Vérifie les catégories avant de créer le montage dans Studio.'
+                : 'Aucune scène classée automatiquement. Classe les passages manuellement.';
+            }catch(error){details.textContent='Analyse visuelle locale indisponible : '+String(error);}
+            finally{ai.disabled=false;}
+          });
+          const tag=document.createElement('select');
+          tag.setAttribute('aria-label','Type de scène dans '+file.relativePath);
+          for(const [value,label] of [['','Scène non classée'],['briefing','Échanges / briefing'],['mechanics','Mécanique / réglages'],['track','Karting en piste']]){
+            const option=document.createElement('option');option.value=value;option.textContent=label;tag.append(option);
+          }
+          tag.value=sceneLabels.get(file.relativePath)||'';
+          tag.addEventListener('change',event=>{
+            event.preventDefault();
+            if(tag.value)sceneLabels.set(file.relativePath,tag.value);
+            else sceneLabels.delete(file.relativePath);
+          });
+          p.append(inspect,preview,ai,tag,details,images,momentsGrid);
+        }
+        list.append(p);
+      }
+      count.textContent = shown+' / '+items.length+' résultat(s)'+(source?' — '+source:'');
+      more.hidden=shown>=items.length;
+    }
+    search.addEventListener('input',()=>{page=0;render();});
+    type.addEventListener('change',()=>{page=0;render();});
+    more.addEventListener('click',()=>{page++;render();});
+    button.addEventListener('click', async () => {
+      button.disabled=true;
+      status.textContent='Analyse du dossier USB…';
+      try {
+        const result=await invoke('choose_and_scan_folder');
+        if(!result) {
+          status.textContent='Sélection annulée.';pendingMontageRequest=null;
+          window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{count:0,message:status.textContent}}));
+          return;
+        }
+        all=result.files; source=result.sourceName; page=0;selected.clear();sceneLabels.clear();sceneMoments.clear();selectionStatus();
+        status.textContent=result.totalCount+' média(s) recensé(s)'+
+          (result.warnings.length?' • '+result.warnings.length+' avertissement(s)':'');
+        render();
+        if(pendingMontageRequest) {
+          const request=pendingMontageRequest;
+          pendingMontageRequest=null;
+          window.dispatchEvent(new CustomEvent('rtp1:montage-request',{detail:request}));
+        }
+      } catch(err) {
+        status.textContent='Analyse impossible : '+String(err);
+        window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{count:0,message:status.textContent}}));
+        pendingMontageRequest=null;
+      } finally {button.disabled=false;}
+    });
+    window.addEventListener('rtp1:montage-request',async event=>{
+      const request=event.detail;
+      if(!request||typeof request.instruction!=='string')return;
+      if(!all.length && source){
+        window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{count:0,message:'Aucun média compatible dans le dossier sélectionné. Choisis un autre dossier depuis Library.'}}));
+        return;
+      }
+      if(!all.length){
+        pendingMontageRequest=request;
+        window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{count:0,pending:true,message:'Sélectionne ton dossier USB : la recherche reprendra automatiquement après son analyse.'}}));
+        button.click();
+        return;
+      }
+      let ranking;
+      try {
+        const module=await import('./brief-ranking.mjs');
+        // Include the chosen folder name; its files may only have camera timestamps.
+        ranking=module.chooseForBrief(all,request.instruction,10);
+        // Tags chosen after inspecting the contact sheet take precedence over filenames.
+        const planner=await import('./visual-scene-classifier.mjs');
+        const tagged=planner.selectTaggedVideos(all,Object.fromEntries(sceneLabels),10);
+        if(tagged.items.length)ranking=tagged;
+        const reviewed=[];
+        for(const file of all.filter(x=>x.category==='Vidéo')){
+          for(const [frame,label] of (sceneMoments.get(file.relativePath)||new Map())){
+            reviewed.push({file,label,startSeconds:frame*5});
+          }
+        }
+        const editorial = await import('./editorial-selection.mjs');
+        const precise=editorial.selectUniqueMoments(reviewed,18);
+        if(precise.items.length)ranking=precise;
+      } catch(error) {
+        window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{count:0,message:'Recherche locale indisponible : '+String(error)}}));
+        return;
+      }
+      let candidates=[...ranking.items];
+      // Explicit photo requests add up to two stills without taking over the narrative.
+      if(/\bphotos?\b|\bimages?\s+fixes?\b/i.test(request.instruction)){
+        const photos=all.filter(x=>x.category==='Photo' && /\.(jpe?g|png|webp)$/i.test(x.relativePath))
+          .sort((a,b)=>Number(/piste|circuit|course|kart|race|roulage/i.test(b.relativePath))-Number(/piste|circuit|course|kart|race|roulage/i.test(a.relativePath)))
+          .slice(0,2);
+        const editorial = await import('./editorial-selection.mjs');
+        candidates = editorial.insertUniquePhotos(candidates,photos,3);
+      }
+      selected.clear();
+      for(const entry of candidates.slice(0,30))selected.set(entry.file.relativePath,entry.file);
+      selectionStatus();page=0;render();
+      if(!candidates.length){
+        window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{count:0,message:'Ce dossier ne contient aucune vidéo reconnue (MP4, MOV, AVI, MKV, WEBM ou M4V). Sélectionne un dossier contenant des vidéos. Les photos ne sont pas encore prises en charge par le moteur MP4.'}}));
+        return;
+      }
+      const items=candidates.slice(0,30).map(x=>({relativePath:x.file.relativePath,category:x.file.category,
+        startSeconds:x.startSeconds??null,endSeconds:x.endSeconds??null}));
+      window.dispatchEvent(new CustomEvent('rtp1:usb-media-selected',{detail:{source,items}}));
+      window.dispatchEvent(new CustomEvent('rtp1:montage-selection-result',{detail:{
+        count:items.length,items,message:items.length+' extraits prévus à partir de '+selected.size+' média(s). '+ranking.warning+' Préparation du MP4…'
+      }}));
+    });
+    panel.append(title,explanation,button,status,suggestControls,suggestionStatus,controls,count,list,more,selectionLabel,studioButton);
+    library.prepend(panel);
+    selectionStatus();render();
+  });
+})();

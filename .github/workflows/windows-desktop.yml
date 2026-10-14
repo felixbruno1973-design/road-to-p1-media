@@ -1,0 +1,79 @@
+name: Windows installer
+on:
+  push:
+    branches: [feature/local-usb-video-engine]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: windows-installer-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run check
+      - run: npm test
+      - run: npm run desktop:model
+      - run: npm run desktop:prepare
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Bundle local video engine
+        shell: pwsh
+        run: |
+          choco install ffmpeg -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'FFmpeg installation failed' }
+          New-Item -ItemType Directory -Force src-tauri/resources | Out-Null
+          foreach ($name in @('ffmpeg','ffprobe')) {
+            $binary = Get-ChildItem 'C:/ProgramData/chocolatey/lib/ffmpeg/tools' -Filter ($name + '.exe') -Recurse -File | Select-Object -First 1
+            if (-not $binary) { throw ('Missing FFmpeg binary: ' + $name) }
+            Copy-Item $binary.FullName ("src-tauri/resources/" + $name + ".exe")
+            & ("src-tauri/resources/" + $name + ".exe") -version
+            if ($LASTEXITCODE -ne 0) { throw 'Bundled video engine cannot start' }
+          }
+      - name: Native unit tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+      - name: Native 60-second render, audio, cuts and source integrity
+        run: cargo test --manifest-path src-tauri/Cargo.toml renders_sixty_seconds -- --ignored --nocapture
+      - name: JavaScript renderer integration
+        shell: pwsh
+        run: |
+          $env:RTP1_FFMPEG = (Resolve-Path src-tauri/resources/ffmpeg.exe).Path
+          $env:RTP1_FFPROBE = (Resolve-Path src-tauri/resources/ffprobe.exe).Path
+          node --test tests/render-integration.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Renderer integration failed' }
+      - name: Build Windows installer
+        run: npx --no-install tauri build --bundles nsis
+      - name: Installer checksum and build identity
+        shell: pwsh
+        run: |
+          $dir = 'src-tauri/target/release/bundle/nsis'
+          $files = Get-ChildItem "$dir/*.exe"
+          if (-not $files) { throw 'Installer missing' }
+          $files | ForEach-Object { "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)" } | Set-Content "$dir/SHA256SUMS.txt"
+          "Commit: $env:GITHUB_SHA`nRun: $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID" | Set-Content "$dir/BUILD.txt"
+      - name: Publish installer
+        id: installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: road-to-p1-media-windows-${{ github.sha }}
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/nsis/SHA256SUMS.txt
+            src-tauri/target/release/bundle/nsis/BUILD.txt
+          if-no-files-found: error
+          retention-days: 30
+      - name: Download link
+        shell: pwsh
+        run: Add-Content $env:GITHUB_STEP_SUMMARY '[Telecharger installateur Windows](${{ steps.installer.outputs.artifact-url }})'

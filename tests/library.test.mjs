@@ -6,7 +6,9 @@ const source=readFileSync(new URL('../app.js',import.meta.url),'utf8');
 function library(){
  const fields={libSearch:{value:''},libTypeFilter:{value:''},libSort:{value:'date-desc'}};
  const context=vm.createContext({console,Blob,document:{getElementById:id=>fields[id]},window:{},setTimeout,clearTimeout});
- vm.runInContext(source.replace('init();\n})();','globalThis.lib={mediaType,visibleLibrary,dbRemoveMany,setItems:x=>libraryCache=x,setFolder:x=>libraryFolder=x};\n})();'),context);
+ const withoutStartup=source.replace(/init\(\);\r?\n\}\)\(\);\s*$/, 'globalThis.lib={mediaType,visibleLibrary,dbRemoveMany,setItems:x=>libraryCache=x,setFolder:x=>libraryFolder=x};\n})();');
+ assert.notEqual(withoutStartup,source,'Library test hook must replace app startup on CRLF and LF');
+ vm.runInContext(withoutStartup,context);
  return {lib:context.lib,context,fields};
 }
 test('legacy files with empty or generic MIME types are detected by extension',()=>{

@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "title": "Lara — Course Angerville",
+  "format": {
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "videoCodec": "h264",
+    "audioCodec": "aac"
+  },
+  "clips": [
+    {
+      "assetId": "media-example-001",
+      "startMs": 4000,
+      "endMs": 9000,
+      "speed": 1,
+      "transition": {
+        "type": "cut",
+        "durationMs": 0
+      }
+    },
+    {
+      "assetId": "media-example-002",
+      "startMs": 2200,
+      "endMs": 7200,
+      "speed": 0.5,
+      "transition": {
+        "type": "crossfade",
+        "durationMs": 350
+      }
+    }
+  ],
+  "audio": {
+    "assetId": null,
+    "volume": 0.7
+  },
+  "overlays": [
+    {
+      "kind": "text",
+      "text": "ROAD TO P1",
+      "startMs": 0,
+      "endMs": 1800
+    }
+  ]
+}
