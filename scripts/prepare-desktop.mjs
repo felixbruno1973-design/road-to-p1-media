@@ -11,6 +11,7 @@ for(const name of ['index.html','style.css','culture-v24.js','app.js','desktop-u
 await copyFile(new URL('./studio-project.mjs',import.meta.url),new URL('studio-project.mjs',output));
 await copyFile(new URL('./brief-ranking.mjs',import.meta.url),new URL('brief-ranking.mjs',output));
 await copyFile(new URL('./visual-scene-classifier.mjs',import.meta.url),new URL('visual-scene-classifier.mjs',output));
+await copyFile(new URL('../editorial-selection.mjs',import.meta.url),new URL('editorial-selection.mjs',output));
 await mkdir(new URL('models/ssdlite_mobilenet_v2/',output),{recursive:true});
 for(const name of ['model.json',...Array.from({length:5},(_,i)=>'group1-shard'+(i+1)+'of5')]){
   await copyFile(new URL('../model-assets/ssdlite_mobilenet_v2/'+name,import.meta.url),
