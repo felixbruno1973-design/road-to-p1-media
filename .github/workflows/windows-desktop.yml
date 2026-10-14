@@ -76,4 +76,4 @@ jobs:
           retention-days: 30
       - name: Download link
         shell: pwsh
-        run: Add-Content $env:GITHUB_STEP_SUMMARY '[Télécharger l’installateur Windows](${{ steps.installer.outputs.artifact-url }})'
+        run: Add-Content $env:GITHUB_STEP_SUMMARY '[Telecharger installateur Windows](${{ steps.installer.outputs.artifact-url }})'
